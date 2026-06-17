@@ -1,9 +1,18 @@
 # SPDX-FileCopyrightText: 2026 Open Source Robotics Foundation, Inc.
 # SPDX-License-Identifier: Apache-2.0
-"""``ros2 nodl describe NODE_NAME [knobs...]`` -- observe a running node and publish its description."""
+"""``ros2 nodl describe NODE_NAME [knobs...]`` -- observe a running node and publish its description.
+
+The observation itself is performed by the C++ ``observe`` executable (from the
+``nodl_observe`` package): the verb is a thin wrapper that shells out to it,
+receives the latched ``rosgraph_msgs/Node`` the binary publishes, and renders it.
+The serialized message is the only language boundary -- there is no in-process
+C++<->Python message conversion and no pybind build surface.
+"""
 
 import argparse
+import json
 import os
+import subprocess
 import sys
 import time
 
@@ -11,6 +20,10 @@ from ros2nodl.verb import VerbExtension
 
 _DEFAULT_TOPIC = '/nodl/observed_node'
 _DEFAULT_TIMEOUT = 5.0
+
+# How long the binary is asked to stay alive after publishing, so its latched
+# (transient_local) sample is still being served when we subscribe to render it.
+_KEEPALIVE_SEC = 3.0
 
 
 def _infer_format(path: str) -> str:
@@ -25,10 +38,7 @@ def _infer_format(path: str) -> str:
         return 'yaml'
     if ext == '.json':
         return 'json'
-    raise argparse.ArgumentTypeError(
-        f'-o/--output: unrecognised extension "{ext}"; '
-        'use .yaml, .yml, or .json'
-    )
+    raise argparse.ArgumentTypeError(f'-o/--output: unrecognised extension "{ext}"; use .yaml, .yml, or .json')
 
 
 class DescribeVerb(VerbExtension):
@@ -55,19 +65,17 @@ class DescribeVerb(VerbExtension):
             action='store_true',
             default=False,
             dest='no_params',
-            help=(
-                'Skip remote parameter service calls. '
-                'Faster and zero-contact with the target node.'
-            ),
+            help=('Skip remote parameter service calls. Faster and zero-contact with the target node.'),
         )
         parser.add_argument(
             '--topic',
             metavar='NAME',
             default=_DEFAULT_TOPIC,
-            help='Latched topic to publish the observation on (default: %(default)s).',
+            help='Latched topic the description is published on (default: %(default)s).',
         )
         parser.add_argument(
-            '-o', '--output',
+            '-o',
+            '--output',
             metavar='FILE',
             default=None,
             dest='output',
@@ -97,6 +105,47 @@ class DescribeVerb(VerbExtension):
         )
 
 
+def _observe_binary():
+    """Return the path to the C++ ``observe`` executable, or ``None`` if absent."""
+    try:
+        from ament_index_python.packages import get_package_prefix
+
+        prefix = get_package_prefix('nodl_observe')
+    except Exception:
+        return None
+    candidate = os.path.join(prefix, 'lib', 'nodl_observe', 'observe')
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _latched_qos():
+    """The QoS the ``observe`` binary latch-publishes with (reliable, transient_local, depth 1)."""
+    from rclpy.qos import (
+        DurabilityPolicy,
+        HistoryPolicy,
+        QoSProfile,
+        ReliabilityPolicy,
+    )
+
+    return QoSProfile(
+        depth=1,
+        history=HistoryPolicy.KEEP_LAST,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    )
+
+
+def _to_yaml(msg) -> str:
+    from rosidl_runtime_py import message_to_yaml
+
+    return message_to_yaml(msg)
+
+
+def _to_json(msg) -> str:
+    from rosidl_runtime_py.convert import message_to_ordereddict
+
+    return json.dumps(message_to_ordereddict(msg), indent=2) + '\n'
+
+
 def _run(
     *,
     node_name: str,
@@ -106,88 +155,96 @@ def _run(
     output_path,
     output_format,
 ) -> int:
-    import rclpy
-    from rclpy.duration import Duration
-
-    try:
-        from nodl_observe import NodeNotFoundError, latched_qos, observe_node
-        from nodl_observe.serialization import to_json, to_yaml
-    except ImportError as e:
-        # rosgraph_msgs < 2.0.4 (e.g. older distros) has no Node message.
+    binary = _observe_binary()
+    if binary is None:
         print(
-            f'ros2 nodl describe: observation support unavailable ({e}); '
-            'rosgraph_msgs >= 2.0.4 is required.',
+            'ros2 nodl describe: the nodl_observe `observe` executable was not '
+            'found; build/install the nodl_observe package (it provides the '
+            'observation backend).',
             file=sys.stderr,
         )
         return 1
 
-    observer_name = f'_ros2nodl_describe_{os.getpid()}'
-    # Own the rclpy lifecycle only if nobody initialised it yet.  In production
-    # the CLI is the sole owner; an embedding caller (e.g. an in-process test
-    # harness) that already called rclpy.init() keeps ownership.
+    import rclpy
+    from rosgraph_msgs.msg import Node as NodeMsg
+
+    # Spawn the observer: it observes the target, latch-publishes on `topic`, and
+    # stays alive for `_KEEPALIVE_SEC` so this process can subscribe and render.
+    cmd = [
+        binary,
+        node_name,
+        '--timeout',
+        repr(float(timeout_sec)),
+        '--topic',
+        topic,
+        '--spin-seconds',
+        repr(_KEEPALIVE_SEC),
+    ]
+    if not include_parameters:
+        cmd.append('--no-parameters')
+    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True)
+
+    # Own the rclpy lifecycle only if nobody initialised it yet (an embedding
+    # caller -- e.g. an in-process test harness -- that already called
+    # rclpy.init() keeps ownership).
     try:
         rclpy.init()
         owns_context = True
     except RuntimeError:
         owns_context = False
+
+    received = []
     try:
-        node = rclpy.create_node(observer_name, start_parameter_services=False)
+        node = rclpy.create_node(f'_ros2nodl_describe_{os.getpid()}', start_parameter_services=False)
         try:
-            deadline = time.monotonic() + timeout_sec
-            try:
-                msg = observe_node(
-                    node,
-                    node_name,
-                    timeout_sec=timeout_sec,
-                    include_parameters=include_parameters,
-                )
-            except NodeNotFoundError:
-                print(
-                    f'ros2 nodl describe: node not found: {node_name!r}',
-                    file=sys.stderr,
-                )
-                return 1
+            node.create_subscription(NodeMsg, topic, lambda m: received.append(m), _latched_qos())
 
-            # Serialise for stdout / file.
-            yaml_text = to_yaml(msg)
+            # The binary may spend up to `timeout_sec` discovering before it
+            # publishes; wait for that plus the keepalive window plus margin.
+            deadline = time.monotonic() + timeout_sec + _KEEPALIVE_SEC + 2.0
+            while not received and time.monotonic() < deadline:
+                rclpy.spin_once(node, timeout_sec=0.1)
+                if not received and proc.poll() is not None:
+                    # The binary exited before publishing -- usually node-not-found.
+                    break
 
+            if not received:
+                _, err = proc.communicate(timeout=2.0)
+                if err:
+                    sys.stderr.write(err if err.endswith('\n') else err + '\n')
+                rc = proc.returncode if proc.returncode not in (None, 0) else 1
+                if rc == 1 and not err:
+                    print(
+                        f'ros2 nodl describe: timed out waiting for an observation of {node_name!r} on {topic!r}.',
+                        file=sys.stderr,
+                    )
+                return rc
+
+            msg = received[0]
             if output_path is None:
-                print(yaml_text, end='')
+                print(_to_yaml(msg), end='')
             else:
-                if output_format == 'json':
-                    text = to_json(msg)
-                else:
-                    text = yaml_text
+                text = _to_json(msg) if output_format == 'json' else _to_yaml(msg)
                 try:
                     with open(output_path, 'w') as fh:
                         fh.write(text)
                 except OSError as e:
                     print(f'ros2 nodl describe: {e}', file=sys.stderr)
                     return 1
-
-            # Latched publish: transient_local, keep_last(1), reliable.
-            pub = node.create_publisher(type(msg), topic, latched_qos())
-            pub.publish(msg)
-
-            # Wait for all currently-matched subscribers to acknowledge receipt,
-            # bounded by whatever budget is left on the timeout clock.
-            remaining = max(0.0, deadline - time.monotonic())
-            try:
-                acked = pub.wait_for_all_acked(Duration(seconds=remaining))
-            except NotImplementedError:
-                # The RMW cannot track acknowledgements; best-effort then.
-                acked = True
-            if not acked:
-                print(
-                    'ros2 nodl describe: warning: subscribers did not all '
-                    'acknowledge the published description within the timeout',
-                    file=sys.stderr,
-                )
-
         finally:
             node.destroy_node()
     finally:
         if owns_context:
             rclpy.shutdown()
+        # Reap the observer; it should exit on its own after the keepalive window.
+        try:
+            proc.wait(timeout=_KEEPALIVE_SEC + 2.0)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
 
     return 0

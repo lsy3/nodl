@@ -13,26 +13,49 @@ parameter services), actual QoS, type hashes, parameter descriptors and
 current values — unfiltered. Deciding what counts as "the node's interface"
 is *interpretation*, which belongs to Describe.
 
+This is the **C++ (`ament_cmake`) reimplementation** of the observer. It
+exposes a reusable `observe_node(...)` library plus a thin `observe`
+executable.
+
 ## API
 
-```python
-import rclpy
-from nodl_observe import observe_node
+```cpp
+#include "rclcpp/rclcpp.hpp"
+#include "nodl_observe/observe.hpp"
 
-rclpy.init()
-node = rclpy.create_node('observer')
-msg = observe_node(node, '/my_namespace/my_node', timeout_sec=5.0)
+rclcpp::init(argc, argv);
+auto node = std::make_shared<rclcpp::Node>("observer");
+
+nodl_observe::Options opts;          // timeout{5.0s}, include_parameters{true}
+auto msg = nodl_observe::observe_node(*node, "/my_namespace/my_node", opts);
 ```
 
 `observe_node` never creates or spins its own node; it uses the caller's node
-for graph queries and (unless `include_parameters=False`) the target's
-parameter services. `timeout_sec` is a ceiling shared across discovery
-polling and all parameter round-trips — it returns as soon as the graph
-settles. Serializers live in `nodl_observe.serialization` (`to_yaml`,
-`to_json`); the QoS profile of the latched CLI publish is exposed as
-`nodl_observe.latched_qos()`.
+for all graph queries and (unless `opts.include_parameters == false`) the
+target's parameter services. `opts.timeout` is a ceiling shared across
+discovery/stability polling and all parameter round-trips — it returns as soon
+as the graph settles. **The caller must not be spinning `node` on another
+thread concurrently**: parameter collection drives async futures via a
+short-lived internal executor that owns the node for that window.
 
-The CLI front-end is `ros2 nodl describe` (in the `ros2nodl` package).
+`nodl_observe::latched_qos()` exposes the QoS profile of the latched CLI
+publish (`reliable + transient_local + keep_last(1)`).
+
+## The `observe` executable
+
+```
+observe <node_fqn> [--timeout SECONDS] [--no-parameters] [--spin-seconds N] [--topic TOPIC]
+```
+
+Defaults: `--timeout 5.0`, parameters on, `--spin-seconds 0` (spin forever
+until SIGINT), `--topic /nodl/observed_node`. It observes the target, then
+**latch-publishes** the resulting `rosgraph_msgs/Node` on `--topic`
+(transient_local) and stays alive so late subscribers can still fetch the
+sample. Exit code `1` if the target node never appears within the timeout.
+
+The serialized `Node` is the language boundary for the future `ros2 nodl
+describe` verb, which is a thin Python wrapper that **shells out** to this
+`observe` binary and renders the result (verb wiring is a **follow-up**).
 
 ## Observability limits
 
@@ -40,79 +63,45 @@ Not every `Node.msg` field is observable from an external process:
 
 | Entity | What is filled |
 |---|---|
-| publishers / subscriptions | name, type, QoS, and RIHS type hash via the info-by-topic graph queries |
-| service servers / clients | name and types only; **QoS is reported as `*_UNKNOWN`** — there is no info-by-service API in rclpy/rmw — and the type hash is unset |
+| publishers / subscriptions | name, type, QoS, and RIHS type hash via the info-by-topic graph queries (`get_{publishers,subscriptions}_info_by_topic`) |
+| service servers / clients | name and types only; **QoS is reported as `*_UNKNOWN`** — there is no info-by-service API in rclcpp/rmw — and the type hash is unset (message default: version 1, all-zero value) |
 | action servers / clients | derived: the hidden `<action>/_action/*` entities are folded into each `Action` entry (topics get real QoS, services get UNKNOWN). Orphan `_action/*` entities stay flat — nothing is discarded |
 
-**Per-RMW gaps surface honestly rather than being papered over.** The *full*
-observation — every QoS policy a remote endpoint exposes over discovery — is
-the baseline; some `(distro, RMW)` combinations observe strictly *less*, and
-those gaps are recorded faithfully (never fabricated). Reliability, durability,
-and deadline come through everywhere; the two known gaps are:
+Action graph queries drop to the `rcl_action` C API
+(`rcl_action_get_{server,client}_names_and_types_by_node`); there is no
+`rclcpp_action` wrapper for them.
 
-- **`rmw_fastrtps_cpp` on jazzy** does not propagate history or depth over
-  discovery (`history → UNKNOWN`, `depth → 0`). Newer fastrtps (kilted onward)
-  does — so this is version-specific, not inherent to fastrtps.
-- **`rmw_cyclonedds_cpp`** reports a `KEEP_ALL` queue's `depth` as `0` (it does
-  observe the `KEEP_ALL` history policy). `rmw_zenoh_cpp` reports the actual
-  depth.
+**Per-RMW gaps surface honestly rather than being papered over.** Reliability,
+durability, and deadline come through everywhere; the known gaps (e.g.
+`rmw_fastrtps_cpp` on jazzy dropping history/depth over discovery,
+`rmw_cyclonedds_cpp` reporting a `KEEP_ALL` queue's depth as `0`) are recorded
+faithfully, never fabricated.
 
-These are locked in by tests across the RMW matrix — if a future rclpy/RMW
-exposes service QoS or changes history/depth propagation, the affected golden
-*and* the targeted assertion both move, flagging it.
+Infinite/unspecified QoS durations (and any value overflowing
+`builtin_interfaces/Duration.sec`) are canonicalised to a fixed, CDR-valid
+sentinel of `{sec = INT32_MAX, nanosec = 0}`, applied uniformly on every distro
+(this differs from graph-monitor's `{0, 0}`).
 
-Requires **Iron or newer** and a `rosgraph_msgs` that provides `Node.msg`. The
-graph messages are now released across jazzy (`2.0.4`), kilted (`2.3.2`),
-lyrical (`2.4.5`), rolling (`2.5.0`), and even humble (`1.2.3`) — all via
-ros2-testing where they lead the main index. **Humble works as a message but
-not as a runtime target**: it predates Iron, so it lacks REP-2011 topic type
-hashes and the `BEST_AVAILABLE` QoS enum, and its `builtin_interfaces/Duration`
-overflows on an infinite QoS deadline. The observation tests are therefore
-capability-gated to Iron+ (so humble's CI leg skips cleanly); full pre-Iron
-support is a tracked follow-up.
+Requires a `rosgraph_msgs` that provides `Node.msg`. **Humble (pre-Iron) is
+supported as a runtime target**, message-identical to Iron+: the REP-2011 topic
+type hash and the `BEST_AVAILABLE` QoS enum do not exist there, so on Humble the
+topic type hash is left unset (same honest-unknown state as services) and
+`BEST_AVAILABLE` is compiled out — the differences live only in those unfilled
+fields, never in the message shape. This is gated by the `ROS2_${ROS_DISTRO}`
+compile definition, and Humble is built + tested in CI with its own fixtures.
 
-## Tests and golden files
+## Tests
 
-Golden YAML renders of three scenario graphs (minimal, full-surface,
-multi-node isolation) are **deduplicated** across `(distro, RMW)`: most
-combinations observe the same thing, so the common result is stored once and
-only genuine differences get their own file. The test resolves most-specific
-first:
-
-```
-test/expected/
-  _base/<scenario>.yaml            # the full/canonical observation (most combos)
-  <rmw>/<scenario>.yaml            # an RMW-inherent difference, on every distro
-  <distro>/<rmw>/<scenario>.yaml   # a distro+RMW-specific difference
-```
-
-For example, four distros × three RMWs collapse to: `_base/` (the full
-observation), `rmw_cyclonedds_cpp/s2_node.yaml` (cyclonedds's `KEEP_ALL`
-depth-0 quirk, all distros), and `jazzy/rmw_fastrtps_cpp/` (jazzy's older
-fastrtps, which alone drops history/depth). A `(distro, RMW)` with no golden
-anywhere skips with a bootstrap hint.
-
-Only one representation (YAML) is committed — the canonical, human-readable
-form. The JSON renderer is proven by an equivalence test (both renders of the
-same message must parse to the same structure), so no duplicate JSON golden is
-stored.
-
-**Adding an RMW or distro to CI** is designed to be "drop in goldens":
-
-1. add it to the `rmw:` (or `ros:`/`ubuntu:`) matrix in
-   `.github/workflows/test.yml` — the install step derives the apt package
-   name from the RMW (`rmw_x_cpp` → `ros-<distro>-rmw-x-cpp`);
-2. run the integration tests under that `(distro, RMW)` with `REGEN_GOLDENS=1`
-   (writes the most-specific `<distro>/<rmw>/` location), then **promote**: if
-   the new goldens match an existing `_base/` or `<rmw>/` set, delete the
-   redundant copies; otherwise keep them as the override.
-
-The golden for each `(distro, RMW)` is the lock on its exact observed values
-(including the per-combination history/depth differences). The harness needs no
-per-RMW setup — every scenario runs in one process / one session, so even a
-router-based middleware like `rmw_zenoh_cpp` discovers without a separate
-daemon.
-
-The golden YAMLs are real `rosgraph_msgs/Node` samples and double as input
-fixtures for Describe — a NoDL converter can be developed against them
-without running a single node.
+- **Unit tests (gtest)** cover the pure builders with no executor/graph:
+  `test_qos.cpp` (QoS enum mapping incl. `BEST_AVAILABLE`, durations carried,
+  infinite-duration clamp, all-unknown), `test_endpoints.cpp` (topic type
+  hash + QoS carried, name/type-only fallback, sorting, service UNKNOWN QoS +
+  default hash), `test_actions.cpp` (fold + remove-from-flat, orphan stays
+  flat, placeholders, sorting), `test_parameters.cpp` (parameter pairing /
+  sorting / length mismatch, `split_fqn`), and `test_collect_parameters.cpp`
+  (the graceful-degradation path: an absent/unresponsive target yields empty
+  arrays, never throws — this one needs a live rclcpp context).
+- **Integration test (pytest)**, `test/test_observe_integration.py` (authored
+  separately), spins scenario nodes, runs the `observe` binary, and compares
+  the observed `Node` field-by-field against **MCAP fixtures** (which replace
+  the previous YAML goldens; regenerated behind a flag).

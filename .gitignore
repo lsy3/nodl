@@ -3,3 +3,5 @@ __pycache__/
 /build/
 /install/
 /log/
+# Local, untracked Python reference of nodl_observe (the committed package is C++).
+/nodl_observe_py/

@@ -13,52 +13,49 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # nodl_observe's QoS introspection differs per RMW (cyclonedds and zenoh
-        # propagate history/depth over discovery, fastrtps does not), so it is
-        # tested against each; its goldens are keyed by (distro, RMW).  Adding an
-        # RMW here is "drop in goldens": the install step below derives its apt
-        # package name, and the test harness needs no per-RMW setup.  Other
-        # packages are RMW-agnostic but harmlessly re-run on every leg.
-        rmw: [rmw_fastrtps_cpp, rmw_cyclonedds_cpp, rmw_zenoh_cpp]
+        # One job per distro — RMW variation is handled inside the job.
+        # nodl_observe is ament_cmake (C++): a missing rosgraph_msgs/Node.msg is a
+        # BUILD failure (loud), not a silent test-skip, so requires_node_msg is gone.
         ros: [humble, jazzy, kilted, lyrical, rolling]
-        # `ubuntu` is mapped per ROS distro here and merged into every (ros, rmw)
-        # combination above (add a distro by extending both `ros` and this list).
-        # `requires_node_msg: true` marks distros that ship Node.msg and so MUST
-        # run observe (a missing message there is a failure, not a silent skip).
-        # humble has no Node.msg yet -> left unflagged so it skips cleanly.  Flip
-        # a distro on once its rosgraph_msgs carries Node.msg.
+        # ubuntu is mapped per distro; add a distro by extending both lists.
         include:
           - ros: humble
             ubuntu: jammy
           - ros: jazzy
             ubuntu: noble
-            requires_node_msg: true   # rosgraph_msgs 2.0.4 (via ros2-testing)
           - ros: kilted
             ubuntu: noble
-            requires_node_msg: true   # rosgraph_msgs 2.3.2 (via ros2-testing)
           - ros: lyrical
             ubuntu: resolute
-            requires_node_msg: true   # rosgraph_msgs 2.4.5
           - ros: rolling
             ubuntu: resolute
-            requires_node_msg: true   # rosgraph_msgs 2.5.0
     container:
       image: rostooling/setup-ros-docker:ubuntu-${{ matrix.ubuntu }}-latest
-    env:
-      RMW_IMPLEMENTATION: ${{ matrix.rmw }}
     steps:
-      - name: Install the matrix RMW
-        # apt package name is the RMW impl name with underscores -> hyphens
-        # (rmw_zenoh_cpp -> ros-<distro>-rmw-zenoh-cpp), so any RMW just works.
+      - name: Install RMW implementations
+        # Installed upfront so the integration-test loop below can switch
+        # RMW_IMPLEMENTATION without touching apt again.  apt package name = RMW
+        # impl name with underscores → hyphens (rmw_zenoh_cpp →
+        # ros-<distro>-rmw-zenoh-cpp).  rmw_zenoh_cpp is not packaged for humble,
+        # so it is installed (and tested) only on Iron+.
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends \
-            "ros-${{ matrix.ros }}-$(echo '${{ matrix.rmw }}' | tr '_' '-')"
+          rmws="rmw_fastrtps_cpp rmw_cyclonedds_cpp"
+          if [ "${{ matrix.ros }}" != "humble" ]; then
+            rmws="$rmws rmw_zenoh_cpp"
+          fi
+          for rmw in $rmws; do
+            apt-get install -y --no-install-recommends \
+              "ros-${{ matrix.ros }}-$(echo "$rmw" | tr '_' '-')"
+          done
+
       - name: Prefer a rosgraph_msgs that ships Node.msg (best-effort bridge)
-        # Node.msg reaches ros2-testing ahead of the main index on some distros
-        # (e.g. jazzy 2.0.4).  Pull just that package from testing if newer; a
-        # no-op where it is not.  Never fail the build -- a leg without Node.msg
-        # simply skips the observation tests.
+        # Node.msg has not yet reached the main index on humble or jazzy/kilted
+        # (it arrived via ros2-testing ahead of the release).  Pull just that
+        # package from ros2-testing if a newer version is available; a no-op once
+        # it lands in the main index.  Never fail — a missing Node.msg on C++ is
+        # already a hard build error, not a silent skip.
+        if: matrix.ros == 'humble' || matrix.ros == 'jazzy' || matrix.ros == 'kilted'
         continue-on-error: true
         run: |
           key=$(ls /usr/share/keyrings/ros2*archive-keyring.gpg 2>/dev/null | head -1) || true
@@ -69,25 +66,80 @@ jobs:
           apt-get install -y --only-upgrade "ros-${{ matrix.ros }}-rosgraph-msgs" || true
           rm -f /etc/apt/sources.list.d/ros2-testing.list
           apt-get update || true
-      - uses: ros-tooling/action-ros-ci@v0.4
+
+      - name: Install mcap (Python) for the integration-test fixtures
+        # The integration test compares the observed Node against committed MCAP
+        # fixtures via the `mcap` lib and skips (importorskip) when it is absent —
+        # so it MUST be installed here or the comparison silently never runs.
+        # jammy's pip predates PEP 668 and rejects --break-system-packages, so
+        # fall back to a plain install there.
+        run: pip3 install --break-system-packages mcap || pip3 install mcap
+
+      - name: Build and run unit tests (default RMW)
+        # action-ros-ci builds the workspace and runs ALL tests once (including
+        # the RMW-agnostic gtest unit tests).  The default RMW (fastrtps) is used
+        # here; the integration test is re-run per RMW in the steps below.
+        uses: ros-tooling/action-ros-ci@v0.4
         with:
           package-name: ament_nodl nodl nodl_observe nodl_schema ros2nodl test_ament_nodl
           target-ros2-distro: ${{ matrix.ros }}
-      - name: Require Node.msg where the distro must support observe
-        # Guards against the silent-skip trap: a leg whose rosgraph_msgs lacks
-        # Node.msg skips every observation test (pytest.importorskip) and still
-        # reports green.  On distros that are supposed to support observe, turn
-        # that into a loud failure.  Flip `requires_node_msg: true` for a distro
-        # once it ships Node.msg.
-        if: matrix.requires_node_msg
+
+      # Re-run only the RMW-sensitive integration test against the already-built
+      # install space for each RMW.  A fresh ROS_DOMAIN_ID prevents leftover
+      # discovery state from bleeding between runs; the daemon is stopped before
+      # each leg for the same reason.
+      - name: Integration test — rmw_fastrtps_cpp
+        env:
+          RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+          ROS_DOMAIN_ID: 10
         run: |
-          idl="/opt/ros/${{ matrix.ros }}/share/rosgraph_msgs/msg/Node.idl"
-          test -f "$idl" || {
-            echo "::error::rosgraph_msgs on ${{ matrix.ros }} lacks Node.msg ($idl missing) -- observation tests would silently skip. Failing instead."
-            exit 1
-          }
+          pkill -f ros2 || true
+          . ros_ws/install/setup.sh
+          ros2 daemon stop || true
+          colcon test --build-base ros_ws/build --install-base ros_ws/install \
+            --packages-select nodl_observe \
+            --ctest-args -R test_observe_integration \
+            --event-handlers console_cohesion+
+          colcon test-result --all --verbose
+
+      - name: Integration test — rmw_cyclonedds_cpp
+        env:
+          RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+          ROS_DOMAIN_ID: 11
+        run: |
+          pkill -f ros2 || true
+          . ros_ws/install/setup.sh
+          ros2 daemon stop || true
+          colcon test --build-base ros_ws/build --install-base ros_ws/install \
+            --packages-select nodl_observe \
+            --ctest-args -R test_observe_integration \
+            --event-handlers console_cohesion+
+          colcon test-result --all --verbose
+
+      - name: Integration test — rmw_zenoh_cpp
+        # rmw_zenoh_cpp is not packaged for humble; skip that leg there.
+        if: matrix.ros != 'humble'
+        env:
+          RMW_IMPLEMENTATION: rmw_zenoh_cpp
+          ROS_DOMAIN_ID: 12
+        run: |
+          pkill -f ros2 || true
+          . ros_ws/install/setup.sh
+          ros2 daemon stop || true
+          # rmw_zenoh_cpp needs its router running for cross-process discovery
+          # (the scenario nodes and the observe binary are separate processes).
+          ros2 run rmw_zenoh_cpp rmw_zenohd & zenohd_pid=$!
+          sleep 5
+          colcon test --build-base ros_ws/build --install-base ros_ws/install \
+            --packages-select nodl_observe \
+            --ctest-args -R test_observe_integration \
+            --event-handlers console_cohesion+
+          kill "$zenohd_pid" 2>/dev/null || true
+          colcon test-result --all --verbose
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: colcon-logs-${{ matrix.ros }}-${{ matrix.rmw }}
+          # Artifact key uses distro only — no RMW axis in the matrix any more.
+          name: colcon-logs-${{ matrix.ros }}
           path: ros_ws/log
