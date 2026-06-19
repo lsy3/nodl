@@ -139,8 +139,12 @@ jobs:
           ros2 daemon stop || true
           # rmw_zenoh_cpp needs its router running for cross-process discovery
           # (the scenario nodes and the observe binary are separate processes).
-          ros2 run rmw_zenoh_cpp rmw_zenohd & zenohd_pid=$!
-          sleep 5
+          # Invoke the binary directly: `ros2 run` (the ros2run package) is NOT
+          # installed in the CI image, so `ros2 run rmw_zenoh_cpp rmw_zenohd`
+          # errors with "invalid choice: 'run'".
+          zenohd=$(find "/opt/ros/${{ matrix.ros }}" -name rmw_zenohd -type f | head -1)
+          "$zenohd" & zenohd_pid=$!
+          sleep 8
           colcon test --build-base ros_ws/build --install-base ros_ws/install \
             --packages-select nodl_observe \
             --ctest-args -R test_observe_integration \
