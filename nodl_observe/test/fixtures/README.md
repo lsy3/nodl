@@ -40,7 +40,8 @@ The file is written to `fixtures/<ROS_DISTRO>_<RMW_IMPLEMENTATION>.mcap`.
 Inspect it with the helper script before committing:
 
 ```bash
-python test/mcap_fixtures.py print fixtures/<distro>_<rmw>.mcap
+python test/mcap_fixtures.py print fixtures/<distro>_<rmw>.mcap          # YAML
+python test/mcap_fixtures.py print fixtures/<distro>_<rmw>.mcap -f json   # JSON
 python test/mcap_fixtures.py diff  fixtures/base.mcap fixtures/<distro>_<rmw>.mcap
 ```
 

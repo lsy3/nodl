@@ -10,8 +10,8 @@ Human-readable CLI
 ------------------
 Run directly as a script::
 
-    python mcap_fixtures.py print <file.mcap> [channel]   # YAML for one/all nodes
-    python mcap_fixtures.py diff  <a.mcap> <b.mcap>       # per-channel field diff
+    python mcap_fixtures.py print <file.mcap> [channel] [-f yaml|json]  # one/all nodes
+    python mcap_fixtures.py diff  <a.mcap> <b.mcap>                     # field diff
 
 Dependencies
 ------------
@@ -150,6 +150,20 @@ def node_to_yaml(node_msg) -> str:
     return message_to_yaml(node_msg)
 
 
+def node_to_json(node_msg) -> str:
+    """Render a ``rosgraph_msgs/msg/Node`` to indented JSON (matches the verb's -o)."""
+    import json  # noqa: PLC0415
+
+    from rosidl_runtime_py.convert import message_to_ordereddict  # noqa: PLC0415
+
+    return json.dumps(message_to_ordereddict(node_msg), indent=2) + '\n'
+
+
+def node_to_text(node_msg, fmt: str) -> str:
+    """Render a node as ``'yaml'`` or ``'json'``."""
+    return node_to_json(node_msg) if fmt == 'json' else node_to_yaml(node_msg)
+
+
 def field_diff(a, b) -> str:
     """Return a path-qualified diff of the divergent leaves between *a* and *b*.
 
@@ -216,11 +230,11 @@ def _cli_print(args):
         if args.channel not in nodes:
             raise SystemExit(f'Channel {args.channel!r} not in fixture.  Available: {sorted(nodes)}')
         print(f'=== {args.channel} ===')
-        print(node_to_yaml(nodes[args.channel]))
+        print(node_to_text(nodes[args.channel], args.format))
     else:
         for basename in sorted(nodes):
             print(f'=== {basename} ===')
-            print(node_to_yaml(nodes[basename]))
+            print(node_to_text(nodes[basename], args.format))
 
 
 def _cli_diff(args):
@@ -255,9 +269,12 @@ def main():
     parser = argparse.ArgumentParser(description='Print or diff nodl_observe MCAP fixture files.')
     sub = parser.add_subparsers(dest='command', required=True)
 
-    p_print = sub.add_parser('print', help='Print node YAML from a fixture')
+    p_print = sub.add_parser('print', help='Print node(s) from a fixture as YAML or JSON')
     p_print.add_argument('file', help='Path to .mcap fixture')
     p_print.add_argument('channel', nargs='?', help='Channel (basename) to print; omit for all')
+    p_print.add_argument(
+        '-f', '--format', choices=('yaml', 'json'), default='yaml', help='Output format (default: yaml)'
+    )
     p_print.set_defaults(func=_cli_print)
 
     p_diff = sub.add_parser('diff', help='Field-level diff between two fixtures')
