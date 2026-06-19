@@ -60,9 +60,17 @@ jobs:
         if: matrix.ros == 'humble' || matrix.ros == 'jazzy' || matrix.ros == 'kilted'
         continue-on-error: true
         run: |
-          key=$(ls /usr/share/keyrings/ros2*archive-keyring.gpg 2>/dev/null | head -1) || true
-          [ -n "$key" ] || exit 0
-          echo "deb [signed-by=$key] http://packages.ros.org/ros2-testing/ubuntu ${{ matrix.ubuntu }} main" \
+          # Reuse the ROS apt keyring already in the container (named
+          # ros-archive-keyring.gpg or ros2-archive-keyring.gpg depending on age);
+          # fall back to [trusted=yes] for the official ros2-testing repo if none
+          # is found, rather than silently skipping (the previous bug).
+          key=$(ls /usr/share/keyrings/ros*archive-keyring.gpg 2>/dev/null | head -1) || true
+          if [ -n "$key" ]; then
+            opt="[signed-by=$key]"
+          else
+            opt="[trusted=yes]"
+          fi
+          echo "deb $opt http://packages.ros.org/ros2-testing/ubuntu ${{ matrix.ubuntu }} main" \
             > /etc/apt/sources.list.d/ros2-testing.list
           apt-get update
           apt-get install -y "ros-${{ matrix.ros }}-rosgraph-msgs"
@@ -103,7 +111,7 @@ jobs:
             --packages-select nodl_observe \
             --ctest-args -R test_observe_integration \
             --event-handlers console_cohesion+
-          colcon test-result --all --verbose
+          colcon test-result --test-result-base ros_ws/build --verbose
 
       - name: Integration test — rmw_cyclonedds_cpp
         env:
@@ -117,7 +125,7 @@ jobs:
             --packages-select nodl_observe \
             --ctest-args -R test_observe_integration \
             --event-handlers console_cohesion+
-          colcon test-result --all --verbose
+          colcon test-result --test-result-base ros_ws/build --verbose
 
       - name: Integration test — rmw_zenoh_cpp
         # rmw_zenoh_cpp is not packaged for humble; skip that leg there.
@@ -138,7 +146,7 @@ jobs:
             --ctest-args -R test_observe_integration \
             --event-handlers console_cohesion+
           kill "$zenohd_pid" 2>/dev/null || true
-          colcon test-result --all --verbose
+          colcon test-result --test-result-base ros_ws/build --verbose
 
       - uses: actions/upload-artifact@v4
         if: always()
