@@ -50,11 +50,13 @@ jobs:
           done
 
       - name: Prefer a rosgraph_msgs that ships Node.msg (best-effort bridge)
-        # Node.msg has not yet reached the main index on humble or jazzy/kilted
-        # (it arrived via ros2-testing ahead of the release).  Pull just that
-        # package from ros2-testing if a newer version is available; a no-op once
-        # it lands in the main index.  Never fail — a missing Node.msg on C++ is
-        # already a hard build error, not a silent skip.
+        # Node.msg has not yet reached the main index on humble/jazzy/kilted (it
+        # arrived via ros2-testing ahead of the release).  Install that package
+        # from ros2-testing and `apt-mark hold` it so action-ros-ci's rosdep
+        # can't pull the main-index version back: the C++ build needs Node.msg at
+        # COMPILE time, so a plain `install` (not `--only-upgrade`, which no-ops
+        # when the package isn't pre-installed, e.g. on the humble image) is
+        # required.  A missing Node.msg then surfaces as a loud build error.
         if: matrix.ros == 'humble' || matrix.ros == 'jazzy' || matrix.ros == 'kilted'
         continue-on-error: true
         run: |
@@ -62,8 +64,9 @@ jobs:
           [ -n "$key" ] || exit 0
           echo "deb [signed-by=$key] http://packages.ros.org/ros2-testing/ubuntu ${{ matrix.ubuntu }} main" \
             > /etc/apt/sources.list.d/ros2-testing.list
-          apt-get update || true
-          apt-get install -y --only-upgrade "ros-${{ matrix.ros }}-rosgraph-msgs" || true
+          apt-get update
+          apt-get install -y "ros-${{ matrix.ros }}-rosgraph-msgs"
+          apt-mark hold "ros-${{ matrix.ros }}-rosgraph-msgs"
           rm -f /etc/apt/sources.list.d/ros2-testing.list
           apt-get update || true
 
