@@ -73,11 +73,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_collect_parameters test/test_collect_parameters.cpp)
   target_link_libraries(test_collect_parameters ${PROJECT_NAME})
 
-  # RMW-sensitive Python integration test: register one ctest per RMW via
-  # call_for_each_rmw_implementation (a macro(), not function() -- it needs the
-  # caller-scope rmw_implementation/target_suffix; see rcl/test/CMakeLists.txt).
-  # ctest name -> test_observe_integration__<rmw>. The zenoh case needs a router:
-  # the test self-starts rmw_zenohd (the macro only sets RMW_IMPLEMENTATION).
+  # Register the RMW-sensitive integration test once per RMW via
+  # call_for_each_rmw_implementation (a macro(), not function(); see
+  # rcl/test/CMakeLists.txt). ctest -> test_observe_integration__<rmw>.
   find_package(ament_cmake_pytest REQUIRED)
   find_package(rmw_implementation_cmake REQUIRED)
   macro(observe_integration_test_for_rmw)

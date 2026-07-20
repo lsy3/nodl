@@ -36,60 +36,14 @@ jobs:
     container:
       image: rostooling/setup-ros-docker:ubuntu-${{ matrix.ubuntu }}-latest
     steps:
-      - name: Install RMW implementations
-        # Installed upfront so the integration-test loop below can switch
-        # RMW_IMPLEMENTATION without touching apt again.  apt package name = RMW
-        # impl name with underscores → hyphens (rmw_zenoh_cpp →
-        # ros-<distro>-rmw-zenoh-cpp).  rmw_zenoh_cpp is not packaged for humble,
-        # so it is installed (and tested) only on Iron+.
-        run: |
-          apt-get update
-          rmws="rmw_fastrtps_cpp rmw_cyclonedds_cpp"
-          if [ "${{ matrix.ros }}" != "humble" ]; then
-            rmws="$rmws rmw_zenoh_cpp"
-          fi
-          for rmw in $rmws; do
-            apt-get install -y --no-install-recommends \
-              "ros-${{ matrix.ros }}-$(echo "$rmw" | tr '_' '-')"
-          done
-
-      # Removed the ros2-testing rosgraph_msgs bridge step to test whether the
-      # main-index package now ships Node.msg; restore per-distro if a build fails.
-
-      - name: Build and run unit tests (default RMW)
-        # Builds + runs all tests once. The integration test is registered per RMW
-        # (call_for_each_rmw_implementation, CMakeLists.txt), so this covers
-        # fastrtps + cyclonedds; only zenoh needs the router leg below.
+      - name: Build and run all tests
+        # rosdep installs the RMWs (package.xml test_depends); the integration test
+        # is registered once per RMW (call_for_each_rmw_implementation) and
+        # self-starts rmw_zenohd for zenoh, so this single pass covers every RMW.
         uses: ros-tooling/action-ros-ci@v0.4
         with:
           package-name: ament_nodl nodl nodl_observe nodl_schema ros2nodl test_ament_nodl
           target-ros2-distro: ${{ matrix.ros }}
-
-      # zenoh needs its own leg: it requires a running router (rmw_zenohd) that
-      # the CMake macro doesn't start. Re-run only the zenoh ctest with it up.
-      - name: Integration test — rmw_zenoh_cpp (needs router)
-        # rmw_zenoh_cpp is not packaged for humble; skip that leg there.
-        if: matrix.ros != 'humble'
-        env:
-          ROS_DOMAIN_ID: 12
-        run: |
-          pkill -f ros2 || true
-          . ros_ws/install/setup.sh
-          ros2 daemon stop || true
-          # rmw_zenoh_cpp needs its router running for cross-process discovery
-          # (the scenario nodes and the observe binary are separate processes).
-          # Invoke the binary directly: `ros2 run` (the ros2run package) is NOT
-          # installed in the CI image, so `ros2 run rmw_zenoh_cpp rmw_zenohd`
-          # errors with "invalid choice: 'run'".
-          zenohd=$(find "/opt/ros/${{ matrix.ros }}" -name rmw_zenohd -type f | head -1)
-          "$zenohd" & zenohd_pid=$!
-          sleep 8
-          colcon test --build-base ros_ws/build --install-base ros_ws/install \
-            --packages-select nodl_observe \
-            --ctest-args -R test_observe_integration__rmw_zenoh_cpp \
-            --event-handlers console_cohesion+
-          kill "$zenohd_pid" 2>/dev/null || true
-          colcon test-result --test-result-base ros_ws/build --verbose
 
       - uses: actions/upload-artifact@v4
         if: always()
