@@ -9,10 +9,20 @@
   <author email="hello@alistairenglish.com">Alistair English</author>
   <author email="me@emersonknapp.com">Emerson Knapp</author>
 
+  <depend>nodl_observe</depend>
   <depend>nodl_schema</depend>
+  <depend>rosgraph_msgs</depend>
   <depend>ros2cli</depend>
+  <!-- The describe verb shells out to the nodl_observe `observe` binary and
+       renders its latched Node: rclpy to receive, rosidl_runtime_py to render,
+       ament_index_python to locate the binary.  (Previously transitive via the
+       Python nodl_observe, which is now C++.) -->
+  <depend>rclpy</depend>
+  <depend>rosidl_runtime_py</depend>
+  <depend>ament_index_python</depend>
 
   <test_depend>python3-pytest</test_depend>
+  <test_depend>std_msgs</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

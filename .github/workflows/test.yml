@@ -10,9 +10,17 @@ on:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
+    # mcap-ros2-support is a pip rosdep; PEP 668 (Python >=3.11) needs this.
+    env:
+      PIP_BREAK_SYSTEM_PACKAGES: 1
     strategy:
       fail-fast: false
       matrix:
+        # One job per distro — RMW variation is handled inside the job.
+        # nodl_observe is ament_cmake (C++): a missing rosgraph_msgs/Node.msg is a
+        # BUILD failure (loud), not a silent test-skip, so requires_node_msg is gone.
+        ros: [humble, jazzy, kilted, lyrical, rolling]
+        # ubuntu is mapped per distro; add a distro by extending both lists.
         include:
           - ros: humble
             ubuntu: jammy
@@ -27,9 +35,12 @@ jobs:
     container:
       image: rostooling/setup-ros-docker:ubuntu-${{ matrix.ubuntu }}-latest
     steps:
-      - uses: ros-tooling/action-ros-ci@v0.4
+      - name: Build and run all tests
+        # One pass covers every RMW (call_for_each_rmw_implementation registers a
+        # ctest per RMW; the integration test self-starts rmw_zenohd for zenoh).
+        uses: ros-tooling/action-ros-ci@v0.4
         with:
-          package-name: ament_nodl nodl nodl_schema ros2nodl test_ament_nodl
+          package-name: ament_nodl nodl nodl_observe nodl_schema ros2nodl test_ament_nodl
           target-ros2-distro: ${{ matrix.ros }}
       - uses: actions/upload-artifact@v4
         if: always()
