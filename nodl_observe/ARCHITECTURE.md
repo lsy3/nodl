@@ -1,12 +1,11 @@
 # nodl_observe architecture
 
-`nodl_observe` turns a **running** ROS 2 node into a `rosgraph_msgs/Node`
-message — the input that "Describe" (#53) converts into a NoDL document. The
-design is layered by a single question: **does it touch the live ROS graph?**
-Pure data-shaping sits at the bottom (unit-testable with no ROS), all graph I/O
-is isolated in one orchestrator, and node ownership is pushed to the edges.
-
-## Data flow
+`nodl_observe` turns a **running** ROS 2 node into a `rosgraph_msgs/Node` (the
+input "Describe" #53 converts to a NoDL document). It is layered by one question —
+**does it touch the live ROS graph?** — so all graph I/O lives in one orchestrator
+(`observe.cpp`), the pure builders are unit-testable with no ROS, and node
+ownership is pushed to the edges (the CLI binary owns a node; graph-monitor reuses
+the library in-process).
 
 ```
                           LIVE ROS GRAPH  (RMW / middleware discovery)
@@ -47,25 +46,3 @@ is isolated in one orchestrator, and node ownership is pushed to the edges.
   ros2nodl/verb/describe.py   (Python)
   spawn binary → subscribe latched → rosidl_runtime_py → YAML/JSON
 ```
-
-## Why this shape
-
-- **Pure builders = cheap correctness.** All the tricky logic (QoS mapping,
-  action folding, parameter pairing) takes plain data in and returns messages, so
-  the gtests assert exact outputs with no ROS spun up.
-- **One graph-driving layer.** Only `observe.cpp` polls discovery, so the
-  "wait for the graph to settle" race lives in exactly one place.
-- **No owned node in the core.** `observe_node` borrows the caller's node, so
-  graph-monitor reuses the library in-process while the CLI gets node ownership +
-  latched publish through the thin `observe` binary. The serialized `Node` is the
-  single boundary to the Python verb — no pybind, no C++↔Python conversion.
-
-## Test layers
-
-- **Unit (gtest)** — the pure builders, with no executor/graph (`test_qos.cpp`,
-  `test_endpoints.cpp`, `test_actions.cpp`, `test_parameters.cpp`), plus
-  `test_collect_parameters.cpp` for the degradation path (needs a live context).
-- **Integration (pytest)** — `test_observe_integration.py` spins scenario graphs,
-  runs the `observe` binary, and compares the observed `Node` field-by-field
-  against the MCAP fixtures in `test/fixtures/` (see `test/fixtures/README.md`).
-  `test/mcap_fixtures.py` is the human-readable `print`/`diff` helper.

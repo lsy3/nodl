@@ -10,8 +10,7 @@ on:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
-    # mcap-ros2-support is a pip rosdep; PEP 668 (Python >=3.11) blocks rosdep's
-    # global pip install without this. humble (jammy) is unaffected.
+    # mcap-ros2-support is a pip rosdep; PEP 668 (Python >=3.11) needs this.
     env:
       PIP_BREAK_SYSTEM_PACKAGES: 1
     strategy:
@@ -37,17 +36,14 @@ jobs:
       image: rostooling/setup-ros-docker:ubuntu-${{ matrix.ubuntu }}-latest
     steps:
       - name: Build and run all tests
-        # rosdep installs the RMWs (package.xml test_depends); the integration test
-        # is registered once per RMW (call_for_each_rmw_implementation) and
-        # self-starts rmw_zenohd for zenoh, so this single pass covers every RMW.
+        # One pass covers every RMW (call_for_each_rmw_implementation registers a
+        # ctest per RMW; the integration test self-starts rmw_zenohd for zenoh).
         uses: ros-tooling/action-ros-ci@v0.4
         with:
           package-name: ament_nodl nodl nodl_observe nodl_schema ros2nodl test_ament_nodl
           target-ros2-distro: ${{ matrix.ros }}
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          # Artifact key uses distro only — no RMW axis in the matrix any more.
           name: colcon-logs-${{ matrix.ros }}
           path: ros_ws/log
