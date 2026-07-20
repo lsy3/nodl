@@ -6,6 +6,7 @@
   <description>Observe a running ROS node and produce its runtime description as a rosgraph_msgs/Node message.</description>
   <maintainer email="rosgraph-wg@googlegroups.com">ROSGraph Working Group</maintainer>
   <license>Apache-2.0</license>
+  <author email="sylukewicent@gmail.com">Luke Sy</author>
   <author email="hello@alistairenglish.com">Alistair English</author>
   <author email="me@emersonknapp.com">Emerson Knapp</author>
 
@@ -19,14 +20,17 @@
   <depend>rcl_interfaces</depend>
   <depend>builtin_interfaces</depend>
   <depend>rmw</depend>
+  <depend>cli11</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>rmw_implementation_cmake</test_depend>
   <test_depend>python3-pytest</test_depend>
   <test_depend>rclpy</test_depend>
   <test_depend>rosidl_runtime_py</test_depend>
   <test_depend>std_msgs</test_depend>
   <test_depend>example_interfaces</test_depend>
+  <test_depend>mcap-ros2-support</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

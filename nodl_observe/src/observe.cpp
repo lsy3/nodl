@@ -15,6 +15,7 @@
 #include "nodl_observe/endpoints.hpp"
 #include "nodl_observe/parameters.hpp"
 #include "rclcpp/executors/single_threaded_executor.hpp"
+#include "rclcpp/node_interfaces/node_graph_interface.hpp"
 
 namespace nodl_observe
 {
@@ -53,24 +54,26 @@ struct Snapshot
   }
 };
 
-Snapshot endpoint_snapshot(rclcpp::Node & node, const std::string & name, const std::string & ns)
+Snapshot endpoint_snapshot(
+  rclcpp::node_interfaces::NodeGraphInterface & graph, const std::string & name, const std::string & ns)
 {
-  auto graph = node.get_node_graph_interface();
   Snapshot s;
-  s.pubs = graph->get_publisher_names_and_types_by_node(name, ns, false);
-  s.subs = graph->get_subscriber_names_and_types_by_node(name, ns, false);
-  s.srv_servers = graph->get_service_names_and_types_by_node(name, ns);
-  s.srv_clients = graph->get_client_names_and_types_by_node(name, ns);
+  s.pubs = graph.get_publisher_names_and_types_by_node(name, ns, false);
+  s.subs = graph.get_subscriber_names_and_types_by_node(name, ns, false);
+  s.srv_servers = graph.get_service_names_and_types_by_node(name, ns);
+  s.srv_clients = graph.get_client_names_and_types_by_node(name, ns);
   return s;
 }
 
 std::pair<std::string, std::string> wait_for_node(
-  rclcpp::Node & node, const std::string & target_fqn, const Clock::time_point & deadline)
+  rclcpp::node_interfaces::NodeGraphInterface & graph,
+  const std::string & target_fqn,
+  const Clock::time_point & deadline)
 {
   const auto [name, ns] = split_fqn(target_fqn);
   const std::string target_ns = strip_trailing_slash(ns);
   while (true) {
-    for (const auto & [n, n_ns] : node.get_node_graph_interface()->get_node_names_and_namespaces()) {
+    for (const auto & [n, n_ns] : graph.get_node_names_and_namespaces()) {
       if (n == name && strip_trailing_slash(n_ns) == target_ns) {
         return {name, ns};
       }
@@ -83,14 +86,17 @@ std::pair<std::string, std::string> wait_for_node(
 }
 
 Snapshot wait_for_stable_graph(
-  rclcpp::Node & node, const std::string & name, const std::string & ns, const Clock::time_point & deadline)
+  rclcpp::node_interfaces::NodeGraphInterface & graph,
+  const std::string & name,
+  const std::string & ns,
+  const Clock::time_point & deadline)
 {
-  Snapshot snapshot = endpoint_snapshot(node, name, ns);
+  Snapshot snapshot = endpoint_snapshot(graph, name, ns);
   Snapshot previous = snapshot;
   int stable_count = 1;
   while (stable_count < kStablePolls && Clock::now() < deadline) {
     std::this_thread::sleep_for(kPollInterval);
-    snapshot = endpoint_snapshot(node, name, ns);
+    snapshot = endpoint_snapshot(graph, name, ns);
     if (snapshot == previous) {
       ++stable_count;
     } else {
@@ -189,8 +195,9 @@ rosgraph_msgs::msg::Node observe_node(rclcpp::Node & node, const std::string & t
 {
   const Clock::time_point deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(opts.timeout);
 
-  const auto [name, ns] = wait_for_node(node, target_fqn, deadline);
-  const Snapshot snapshot = wait_for_stable_graph(node, name, ns, deadline);
+  auto & graph = *node.get_node_graph_interface();
+  const auto [name, ns] = wait_for_node(graph, target_fqn, deadline);
+  const Snapshot snapshot = wait_for_stable_graph(graph, name, ns, deadline);
 
   rosgraph_msgs::msg::Node msg;
   msg.name = target_fqn;

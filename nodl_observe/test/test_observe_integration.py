@@ -141,12 +141,42 @@ if not _REGEN and _resolve_fixture() is None:
 # ---------------------------------------------------------------------------
 
 
+def _start_zenoh_router():
+    """Start rmw_zenohd (the per-RMW ctest sets RMW_IMPLEMENTATION but starts no
+    router) and return the Popen so the session fixture can tear it down."""
+    import glob  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    exe = shutil.which('rmw_zenohd')
+    if exe is None:
+        distro = os.environ.get('ROS_DISTRO', '')
+        matches = glob.glob(f'/opt/ros/{distro}/lib/rmw_zenoh_cpp/rmw_zenohd') or glob.glob(
+            '/opt/ros/*/lib/rmw_zenoh_cpp/rmw_zenohd'
+        )
+        exe = matches[0] if matches else None
+    if exe is None:
+        raise RuntimeError('RMW_IMPLEMENTATION=rmw_zenoh_cpp but rmw_zenohd was not found')
+    proc = subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3.0)  # allow the router to come up before rclpy.init()
+    return proc
+
+
 @pytest.fixture(scope='session', autouse=True)
 def _ros_session():
-    """Init/shutdown rclpy exactly once for the whole test module."""
+    """Init/shutdown rclpy once for the module; own the zenoh router when needed."""
+    router = _start_zenoh_router() if _RMW == 'rmw_zenoh_cpp' else None
     rclpy.init()
-    yield
-    rclpy.shutdown()
+    try:
+        yield
+    finally:
+        rclpy.shutdown()
+        if router is not None:
+            router.terminate()
+            try:
+                router.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                router.kill()
+                router.wait()
 
 
 # ---------------------------------------------------------------------------

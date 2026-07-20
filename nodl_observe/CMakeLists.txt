@@ -16,6 +16,8 @@ endif()
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
+find_package(CLI11 REQUIRED)
+
 if(NOT DEFINED ENV{ROS_DISTRO})
   message(FATAL_ERROR "ROS_DISTRO environment variable not set")
 else()
@@ -40,7 +42,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 ament_auto_add_executable(observe
   src/observe_main.cpp
 )
-target_link_libraries(observe ${PROJECT_NAME})
+target_link_libraries(observe ${PROJECT_NAME} CLI11::CLI11)
 
 # ament_auto_add_library / _executable already install and export their targets
 # via ament_auto_package() below (lib -> lib, executable -> lib/${PROJECT_NAME});
@@ -71,12 +73,23 @@ if(BUILD_TESTING)
   ament_add_gtest(test_collect_parameters test/test_collect_parameters.cpp)
   target_link_libraries(test_collect_parameters ${PROJECT_NAME})
 
-  # Discovery-based integration test (authored separately, in Python). Register
-  # it even if the file is not present yet.
+  # RMW-sensitive Python integration test: register one ctest per RMW via
+  # call_for_each_rmw_implementation (a macro(), not function() -- it needs the
+  # caller-scope rmw_implementation/target_suffix; see rcl/test/CMakeLists.txt).
+  # ctest name -> test_observe_integration__<rmw>. The zenoh case needs a router:
+  # the test self-starts rmw_zenohd (the macro only sets RMW_IMPLEMENTATION).
   find_package(ament_cmake_pytest REQUIRED)
-  ament_add_pytest_test(test_observe_integration test/test_observe_integration.py
-    TIMEOUT 180
-  )
+  find_package(rmw_implementation_cmake REQUIRED)
+  macro(observe_integration_test_for_rmw)
+    ament_add_pytest_test(
+      "test_observe_integration${target_suffix}"
+      test/test_observe_integration.py
+      ENV RMW_IMPLEMENTATION=${rmw_implementation}
+      TIMEOUT 180
+    )
+  endmacro()
+
+  call_for_each_rmw_implementation(observe_integration_test_for_rmw)
 endif()
 
 ament_auto_package()

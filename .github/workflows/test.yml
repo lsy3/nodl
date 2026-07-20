@@ -49,89 +49,24 @@ jobs:
               "ros-${{ matrix.ros }}-$(echo "$rmw" | tr '_' '-')"
           done
 
-      - name: Prefer a rosgraph_msgs that ships Node.msg (best-effort bridge)
-        # Node.msg has not yet reached the main index on humble/jazzy/kilted (it
-        # arrived via ros2-testing ahead of the release).  Install that package
-        # from ros2-testing and `apt-mark hold` it so action-ros-ci's rosdep
-        # can't pull the main-index version back: the C++ build needs Node.msg at
-        # COMPILE time, so a plain `install` (not `--only-upgrade`, which no-ops
-        # when the package isn't pre-installed, e.g. on the humble image) is
-        # required.  A missing Node.msg then surfaces as a loud build error.
-        if: matrix.ros == 'humble' || matrix.ros == 'jazzy' || matrix.ros == 'kilted'
-        continue-on-error: true
-        run: |
-          # Reuse the ROS apt keyring already in the container (named
-          # ros-archive-keyring.gpg or ros2-archive-keyring.gpg depending on age);
-          # fall back to [trusted=yes] for the official ros2-testing repo if none
-          # is found, rather than silently skipping (the previous bug).
-          key=$(ls /usr/share/keyrings/ros*archive-keyring.gpg 2>/dev/null | head -1) || true
-          if [ -n "$key" ]; then
-            opt="[signed-by=$key]"
-          else
-            opt="[trusted=yes]"
-          fi
-          echo "deb $opt http://packages.ros.org/ros2-testing/ubuntu ${{ matrix.ubuntu }} main" \
-            > /etc/apt/sources.list.d/ros2-testing.list
-          apt-get update
-          apt-get install -y "ros-${{ matrix.ros }}-rosgraph-msgs"
-          apt-mark hold "ros-${{ matrix.ros }}-rosgraph-msgs"
-          rm -f /etc/apt/sources.list.d/ros2-testing.list
-          apt-get update || true
-
-      - name: Install mcap (Python) for the integration-test fixtures
-        # The integration test compares the observed Node against committed MCAP
-        # fixtures via the `mcap` lib and skips (importorskip) when it is absent —
-        # so it MUST be installed here or the comparison silently never runs.
-        # jammy's pip predates PEP 668 and rejects --break-system-packages, so
-        # fall back to a plain install there.
-        run: pip3 install --break-system-packages mcap || pip3 install mcap
+      # Removed the ros2-testing rosgraph_msgs bridge step to test whether the
+      # main-index package now ships Node.msg; restore per-distro if a build fails.
 
       - name: Build and run unit tests (default RMW)
-        # action-ros-ci builds the workspace and runs ALL tests once (including
-        # the RMW-agnostic gtest unit tests).  The default RMW (fastrtps) is used
-        # here; the integration test is re-run per RMW in the steps below.
+        # Builds + runs all tests once. The integration test is registered per RMW
+        # (call_for_each_rmw_implementation, CMakeLists.txt), so this covers
+        # fastrtps + cyclonedds; only zenoh needs the router leg below.
         uses: ros-tooling/action-ros-ci@v0.4
         with:
           package-name: ament_nodl nodl nodl_observe nodl_schema ros2nodl test_ament_nodl
           target-ros2-distro: ${{ matrix.ros }}
 
-      # Re-run only the RMW-sensitive integration test against the already-built
-      # install space for each RMW.  A fresh ROS_DOMAIN_ID prevents leftover
-      # discovery state from bleeding between runs; the daemon is stopped before
-      # each leg for the same reason.
-      - name: Integration test — rmw_fastrtps_cpp
-        env:
-          RMW_IMPLEMENTATION: rmw_fastrtps_cpp
-          ROS_DOMAIN_ID: 10
-        run: |
-          pkill -f ros2 || true
-          . ros_ws/install/setup.sh
-          ros2 daemon stop || true
-          colcon test --build-base ros_ws/build --install-base ros_ws/install \
-            --packages-select nodl_observe \
-            --ctest-args -R test_observe_integration \
-            --event-handlers console_cohesion+
-          colcon test-result --test-result-base ros_ws/build --verbose
-
-      - name: Integration test — rmw_cyclonedds_cpp
-        env:
-          RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
-          ROS_DOMAIN_ID: 11
-        run: |
-          pkill -f ros2 || true
-          . ros_ws/install/setup.sh
-          ros2 daemon stop || true
-          colcon test --build-base ros_ws/build --install-base ros_ws/install \
-            --packages-select nodl_observe \
-            --ctest-args -R test_observe_integration \
-            --event-handlers console_cohesion+
-          colcon test-result --test-result-base ros_ws/build --verbose
-
-      - name: Integration test — rmw_zenoh_cpp
+      # zenoh needs its own leg: it requires a running router (rmw_zenohd) that
+      # the CMake macro doesn't start. Re-run only the zenoh ctest with it up.
+      - name: Integration test — rmw_zenoh_cpp (needs router)
         # rmw_zenoh_cpp is not packaged for humble; skip that leg there.
         if: matrix.ros != 'humble'
         env:
-          RMW_IMPLEMENTATION: rmw_zenoh_cpp
           ROS_DOMAIN_ID: 12
         run: |
           pkill -f ros2 || true
@@ -147,7 +82,7 @@ jobs:
           sleep 8
           colcon test --build-base ros_ws/build --install-base ros_ws/install \
             --packages-select nodl_observe \
-            --ctest-args -R test_observe_integration \
+            --ctest-args -R test_observe_integration__rmw_zenoh_cpp \
             --event-handlers console_cohesion+
           kill "$zenohd_pid" 2>/dev/null || true
           colcon test-result --test-result-base ros_ws/build --verbose

@@ -45,11 +45,10 @@ python test/mcap_fixtures.py print fixtures/<distro>_<rmw>.mcap -f json   # JSON
 python test/mcap_fixtures.py diff  fixtures/base.mcap fixtures/<distro>_<rmw>.mcap
 ```
 
-## Dependencies
+## Storage format
 
-The `mcap` Python package is required for the fixture helpers and tests.
-Install it separately — it is not in the ROS apt index:
-
-```bash
-pip install mcap
-```
+Fixtures are stored as MCAP files and read via the `mcap` Python package,
+pulled in transitively through the `mcap_ros2_support` test dependency declared
+in `package.xml`.  The fixture helpers use the raw `mcap` reader API together
+with `rclpy.serialization` for CDR deserialisation — they do **not** go through
+the rosbag2 storage plugin API.

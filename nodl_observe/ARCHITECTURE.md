@@ -1,6 +1,3 @@
-<!-- SPDX-FileCopyrightText: 2026 Open Source Robotics Foundation, Inc. -->
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 # nodl_observe architecture
 
 `nodl_observe` turns a **running** ROS 2 node into a `rosgraph_msgs/Node`
@@ -12,7 +9,7 @@ is isolated in one orchestrator, and node ownership is pushed to the edges.
 ## Data flow
 
 ```
-                          LIVE ROS GRAPH  (DDS discovery)
+                          LIVE ROS GRAPH  (RMW / middleware discovery)
                                   │
    ┌──────────────────────────────┼──────────────────────────────┐
    │ NodeGraphInterface           │ rcl_action C API   AsyncParametersClient
@@ -46,42 +43,10 @@ is isolated in one orchestrator, and node ownership is pushed to the edges.
   init → observe_node → latch-publish     reuses the pure builders — no
   on /nodl/observed_node → spin           binary, no verb
       │
-      ▼  (separate process, DDS)
+      ▼  (separate process, via the middleware)
   ros2nodl/verb/describe.py   (Python)
   spawn binary → subscribe latched → rosidl_runtime_py → YAML/JSON
 ```
-
-## Modules
-
-| File | Role | Touches graph? |
-|---|---|---|
-| `qos.{hpp,cpp}` | QoS enum→msg mapping (explicit `switch`), the `{INT32_MAX,0}` duration clamp, `unknown_qos_msg`, `latched_qos` | No — **pure** |
-| `endpoints.{hpp,cpp}` | Build `Topic`/`Service`/`Action` sub-msgs from raw names+types & `TopicEndpointInfo`; `fold_actions`; type hashes; sorting | No — **pure** |
-| `actions.{hpp,cpp}` | Wrap the `rcl_action` C API to get action names/types by node | Yes (C API) |
-| `parameters.{hpp,cpp}` | `build_parameters` (pure pairing) + `collect_parameters` (drives `AsyncParametersClient`, graceful degradation) | Mixed |
-| `observe.{hpp,cpp}` | `observe_node` orchestrator + `split_fqn` | **Yes — the hub** |
-| `observe_main.cpp` | The `observe` executable: arg parsing, node lifecycle, latched publish | owns the node |
-| `../ros2nodl/.../verb/describe.py` | Python verb — shells out to the binary, subscribes, renders | separate process |
-
-## `observe_node` step by step
-
-1. **`split_fqn`** — `/ns/talker` → `("talker", "/ns")`.
-2. **`wait_for_node`** — poll `get_node_names_and_namespaces()` until the target
-   appears, else raise `NodeNotFoundError`.
-3. **`wait_for_stable_graph`** — there is no "discovery complete" signal, so poll
-   the four by-node queries (publisher / subscriber / service-server /
-   service-client names+types) until the set is **unchanged for 3 consecutive
-   200 ms samples**.
-4. **`collect_endpoints`** — per topic, `get_{publishers,subscriptions}_info_by_topic`
-   → filter to this node → `build_topic` (QoS + type hash); `build_service`
-   (always `*_UNKNOWN`); query `rcl_action` → `fold_actions` moves the hidden
-   `<action>/_action/{send_goal,get_result,cancel_goal,feedback,status}` entities
-   out of the flat lists into each `Action` (orphans with no parent stay flat —
-   nothing is discarded).
-5. **parameters** (unless `include_parameters == false`) — a short-lived
-   `SingleThreadedExecutor` drives an `AsyncParametersClient`
-   (`list` → `describe` + `get`); any failure degrades to empty arrays.
-6. Assemble the `Node`, every array **sorted** for deterministic output.
 
 ## Why this shape
 

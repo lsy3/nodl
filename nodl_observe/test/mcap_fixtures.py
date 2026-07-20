@@ -15,10 +15,9 @@ Run directly as a script::
 
 Dependencies
 ------------
-* ``mcap`` (pip-installable; not in any ROS apt index -- install separately):
-    pip install mcap
-  The ``mcap`` and ``rclpy`` imports are guarded so ``--help`` works on a plain
-  host without ROS.
+* ``mcap`` -- pulled in transitively via the ``mcap_ros2_support`` test
+  dependency declared in ``package.xml``.  The ``mcap`` and ``rclpy`` imports
+  are guarded so ``--help`` works on a plain host without ROS.
 """
 
 # ---------------------------------------------------------------------------
@@ -67,7 +66,11 @@ rosgraph_msgs/msg/Action[] action_servers
 
 def _require_mcap():
     if not _MCAP_AVAILABLE:
-        raise RuntimeError('mcap is not installed.  Run: pip install mcap')
+        raise RuntimeError(
+            'mcap is not installed.  '
+            'Ensure the mcap_ros2_support test dependency is available '
+            '(declared in package.xml).'
+        )
 
 
 def _require_rclpy():
