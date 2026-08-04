@@ -88,7 +88,12 @@ ros2 nodl diff nodl/dummy_laser.nodl.yaml nodl/dummy_laser.conformance.yaml
 The semantic diff identifies the `scan` publisher and the changed QoS reliability field. Restore the generated binding,
 rerun conformance, and finish with the working robot in RViz.
 
-## 1. Start the existing robot
+## Current implementation details
+
+The remaining material is the executable subset on current `main`. It validates the tutorial’s starting point while the
+full hero experience above defines the capabilities still to implement.
+
+### Start the existing robot
 
 Build the upstream packages:
 
@@ -129,7 +134,7 @@ The expected application nodes are:
 
 `rviz2` also appears when the visualizer is running.
 
-## 2. Observe the system one node at a time
+### Observe the system one node at a time
 
 NoDL currently describes one node at a time. There is no `describe-system` command, so record each participating node
 explicitly:
@@ -156,7 +161,7 @@ The saved files are raw `rosgraph_msgs/Node` serializations. Current `main` does
 This step exposes the first missing CLI behavior. The desired default is for `ros2 nodl describe NODE` to emit a
 schema-valid draft NoDL document. Raw observation should remain available through an explicit diagnostic option.
 
-## 3. Curate one worked node: `dummy_laser`
+### Curate one worked node: `dummy_laser`
 
 The source creates a `sensor_msgs/msg/LaserScan` publisher on relative topic `scan` with depth 10. Its loop computes
 range values, timestamps messages, and sets `single_rrbot_hokuyo_link` as the message frame.
@@ -180,7 +185,7 @@ The manual translation exposes another missing part of Describe: it needs a poli
 `/rosout`, parameter services, and `/parameter_events`. The default draft should focus on the node's public application
 interface, while an option should retain infrastructure for diagnostics.
 
-## 4. Verify behavior outside NoDL
+### Verify behavior outside NoDL
 
 Confirm that laser messages still arrive:
 
@@ -196,7 +201,7 @@ ros2 run tf2_ros tf2_echo world single_rrbot_hokuyo_link
 
 Stop `tf2_echo` after it reports a transform.
 
-### TF topics are not frame semantics
+#### TF topics are not frame semantics
 
 `robot_state_publisher` publishes transforms used to place the laser scan in RViz. A NoDL document can describe its
 `/tf` and `/tf_static` topic endpoints. Those endpoints do not prove that a particular frame path exists.
@@ -212,7 +217,7 @@ Keep these claims separate:
 | The laser frame connects to the robot frame tree | TF lookup in a running system |
 | RViz can render the scan | Visual or headless application test |
 
-## 5. Register the curated document
+### Register the curated document
 
 The tutorial verification package registers the document during its build. Confirm that the package builds:
 
@@ -224,7 +229,7 @@ Registration makes the expected document discoverable by package and executable 
 provide a `ros2 nodl` verb to print or locate a registered document. That lookup is another CLI gap exposed by the
 tutorial.
 
-## 6. Current verified flow
+### Current verified flow
 
 The workflow available on `main` is:
 
@@ -239,7 +244,7 @@ The workflow available on `main` is:
 
 This flow is useful for evaluating the demo, but it still has manual translation and comparison steps.
 
-## 7. CLI capabilities exposed by the tutorial
+### CLI capabilities exposed by the tutorial
 
 The workflow identifies these required verbs or verb behaviors:
 
@@ -257,13 +262,13 @@ The workflow identifies these required verbs or verb behaviors:
 The command names are candidate UX, not accepted interfaces. This tutorial intentionally avoids a `describe-system`
 requirement. It keeps node descriptions separate and leaves system membership to launch or a future manifest.
 
-## 8. Suggested regression
+### Suggested regression
 
 Change the `scan` publisher reliability while keeping its ROS type unchanged. This produces an interface-level QoS
 change without mixing the demonstration with a compile failure. The future conformance output should identify the
 publisher and the changed reliability field.
 
-## 9. Why work through `dummy_laser`
+### Why work through `dummy_laser`
 
 - It has one clear application endpoint.
 - Its behavior remains meaningful after interface migration.
