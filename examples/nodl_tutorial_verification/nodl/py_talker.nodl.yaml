@@ -1,0 +1,11 @@
+---
+nodl_version: 2
+description: Python talker from demo_nodes_py.
+publishers:
+  - name: chatter
+    type: example_interfaces/msg/String
+    description: Periodic Hello World messages.
+    qos:
+      history: KEEP_LAST
+      depth: 10
+      reliability: RELIABLE

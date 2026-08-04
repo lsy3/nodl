@@ -1,0 +1,11 @@
+---
+nodl_version: 2
+description: C++ talker from demo_nodes_cpp.
+publishers:
+  - name: chatter
+    type: example_interfaces/msg/String
+    description: Periodic Hello World messages.
+    qos:
+      history: KEEP_LAST
+      depth: 7
+      reliability: RELIABLE
