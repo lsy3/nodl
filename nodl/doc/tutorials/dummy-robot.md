@@ -14,6 +14,80 @@ This is a **prototype tutorial**. It exercises the real robot and the current ob
 NoDL drafts, composition, forward generation, semantic diff, and conformance remain design targets.
 :::
 
+## The finished hero experience (design preview)
+
+This is the tutorial we want a user to follow once the missing NoDL features exist. Read the commands in this section as
+the proposed product experience, not as commands available on `main` today. The current verified flow later on this
+page records the executable subset.
+
+### 1. Run the original robot
+
+```bash
+ros2 launch dummy_robot_bringup dummy_robot_bringup_launch.py
+```
+
+RViz shows the robot and the changing laser scan. This is the baseline: `dummy_laser` owns its scan-generation loop;
+NoDL will only take responsibility for its ROS interface.
+
+### 2. Recover a draft interface from the running node
+
+```bash
+ros2 nodl describe /dummy_laser --output nodl/dummy_laser.observed.nodl.yaml
+```
+
+The command writes a schema-valid NoDL draft. It identifies the `scan` publisher, its `sensor_msgs/msg/LaserScan` type,
+and its observed QoS. Infrastructure endpoints can be retained with an explicit diagnostic option, but do not dominate
+the default application-facing draft.
+
+### 3. Curate and compose the authored interface
+
+The author keeps the endpoint that matters and adds semantic documentation. Reusable NoDL fragments supply the common
+node and TF endpoint declarations without pretending that a `/tf` endpoint proves a specific frame path.
+
+```bash
+ros2 nodl compose nodl/dummy_laser.observed.nodl.yaml \
+  --fragment ros2:node-base \
+  --fragment tf:scan-frame \
+  --output nodl/dummy_laser.nodl.yaml
+ros2 nodl validate nodl/dummy_laser.nodl.yaml
+```
+
+The resulting document describes the `scan` publisher and its QoS. The system test still separately requires the
+`world → single_rrbot_hokuyo_link` transform path needed for visualization.
+
+### 4. Build the NoDL-forward variant
+
+```bash
+ros2 nodl generate nodl/dummy_laser.nodl.yaml --language cpp --output generated/dummy_laser
+colcon build --packages-select nodl_dummy_robot_hero
+```
+
+Generation creates the ROS interface binding. The existing C++ scan calculation, loop rate, message timestamps, and
+business logic remain application code.
+
+### 5. Run and compare the NoDL-forward robot
+
+```bash
+ros2 launch nodl_dummy_robot_hero dummy_robot.launch.py interface:=nodl
+ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml
+```
+
+Conformance reports that the expected NoDL interface and observed runtime interface agree. RViz still shows the robot
+and scan, which makes the migration result visible rather than terminal-only.
+
+### 6. Demonstrate a meaningful failure
+
+Change the generated `scan` publisher reliability from `RELIABLE` to `BEST_EFFORT`, rebuild, then run:
+
+```bash
+ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml \
+  --report nodl/dummy_laser.conformance.yaml
+ros2 nodl diff nodl/dummy_laser.nodl.yaml nodl/dummy_laser.conformance.yaml
+```
+
+The semantic diff identifies the `scan` publisher and the changed QoS reliability field. Restore the generated binding,
+rerun conformance, and finish with the working robot in RViz.
+
 ## 1. Start the existing robot
 
 Build the upstream packages:
@@ -165,24 +239,7 @@ The workflow available on `main` is:
 
 This flow is useful for evaluating the demo, but it still has manual translation and comparison steps.
 
-## 7. Target ROSCon flow
-
-The intended complete flow is:
-
-1. Start from the existing `dummy_laser` node.
-2. Describe it into a valid draft NoDL document.
-3. Curate descriptions and author-only policy.
-4. Generate or bind a NoDL-forward interface while retaining scan logic.
-5. Compose reusable node and TF endpoint fragments into their correct node documents.
-6. Run the original and NoDL-forward variants.
-7. Compare expected and observed interfaces.
-8. Introduce a deliberate topic, type, parameter, or QoS regression.
-9. Show a semantic diff and conformance failure.
-10. Restore the correct variant and finish in RViz.
-
-Steps 2 and 4 through 9 require NoDL capabilities that do not exist on `main` yet.
-
-## 8. CLI capabilities exposed by the tutorial
+## 7. CLI capabilities exposed by the tutorial
 
 The workflow identifies these required verbs or verb behaviors:
 
@@ -200,13 +257,13 @@ The workflow identifies these required verbs or verb behaviors:
 The command names are candidate UX, not accepted interfaces. This tutorial intentionally avoids a `describe-system`
 requirement. It keeps node descriptions separate and leaves system membership to launch or a future manifest.
 
-## 9. Suggested regression
+## 8. Suggested regression
 
 Change the `scan` publisher reliability while keeping its ROS type unchanged. This produces an interface-level QoS
 change without mixing the demonstration with a compile failure. The future conformance output should identify the
 publisher and the changed reliability field.
 
-## 10. Why work through `dummy_laser`
+## 9. Why work through `dummy_laser`
 
 - It has one clear application endpoint.
 - Its behavior remains meaningful after interface migration.
