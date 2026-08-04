@@ -1,8 +1,8 @@
 # Nav2 ControllerServer: reusable lifecycle composition
 
-This design-preview tutorial uses Nav2's C++ `nav2_controller::ControllerServer` to show why NoDL needs reusable
-node-base documents and ownership-aware composition. It is a framework composition example, not a replacement for the
-Dummy robot migration tutorial.
+This tutorial uses Nav2's C++ `nav2_controller::ControllerServer` to show why NoDL needs reusable node-base documents
+and ownership-aware composition. It is a framework composition example, not a replacement for the Dummy robot
+migration tutorial.
 
 The reviewed source is pinned to Navigation2 commit
 [`b356ac1`](https://github.com/ros-navigation/navigation2/blob/b356ac1f8512bcc5f9b595562139f5b02095319b/nav2_controller/src/controller_server.cpp).
@@ -10,13 +10,13 @@ The reviewed source is pinned to Navigation2 commit
 `transformed_global_plan` and `tracking_feedback` publishers, and a speed-limit subscription. On activation it creates
 a bond. Its local costmap and plugins also depend on TF.
 
-:::{important}
-This is a **design preview**. Current NoDL can validate direct topic, service, and action endpoints, but it cannot
-express reusable fragments, lifecycle state, bond ownership, TF frame semantics, or forward generation. The commands
-below define the intended experience; they are not available on `main`.
+:::{warning}
+**Not yet implemented.** This walkthrough is the target NoDL product experience. Current NoDL can validate direct
+topic, service, and action endpoints, but it cannot yet compose reusable fragments, model lifecycle state or bond
+ownership, express TF frame semantics, generate bindings, or conform a running node.
 :::
 
-## Proposed complete flow
+## Tutorial
 
 ### 1. Run a configured Nav2 system
 
@@ -56,7 +56,7 @@ ros2 nodl validate nodl/controller_server.nodl.yaml
 
 Composition has explicit ownership boundaries:
 
-| Capability | Owner | What NoDL would describe |
+| Capability | Owner | What NoDL describes |
 |---|---|---|
 | Lifecycle services and state transitions | `nav2::LifecycleNode` base | Shared lifecycle endpoint contract; not controller behavior |
 | Bond | Nav2 base during activation | Shared bond interface and activation ownership |
@@ -75,8 +75,8 @@ ros2 nodl generate nodl/controller_server.nodl.yaml \
 colcon build --packages-select nav2_controller
 ```
 
-Generation would bind declared ROS interfaces to the existing C++ implementation. It would not generate controller
-plugins, local-costmap behavior, TF lookup logic, control-loop timing, real-time scheduling, or recovery behavior.
+Generation binds declared ROS interfaces to the existing C++ implementation. It does not generate controller plugins,
+local-costmap behavior, TF lookup logic, control-loop timing, real-time scheduling, or recovery behavior.
 
 ### 5. Conform a running lifecycle node
 
@@ -99,8 +99,8 @@ Launch an intentionally incomplete composed variant that omits the Nav2 bond cap
 ros2 nodl conform /controller_server --file nodl/controller_server.nodl.yaml
 ```
 
-The semantic diff should attribute the missing bond interface to the `nav2:bond` fragment rather than incorrectly
-blaming `ControllerServer`'s application endpoints. Restore the fragment, reconform, and confirm the node is active.
+The semantic diff attributes the missing bond interface to the `nav2:bond` fragment rather than incorrectly blaming
+`ControllerServer`'s application endpoints. Restore the fragment, reconform, and confirm the node is active.
 
 ## What works today
 
