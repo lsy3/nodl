@@ -1,7 +1,8 @@
 # Dummy robot: from observation to a visible system
 
 The `dummy_robot` demo combines a map server, fake joint states, fake laser data, `robot_state_publisher`, TF, launch,
-and RViz. It is the preferred ROSCon hero because the robot and laser result remain visible after the interface work.
+and RViz. It is a strong ROSCon demonstration because the robot and laser result remain visible after the interface
+work.
 
 The tutorial starts and finishes with the complete robot. NoDL operations remain node-scoped, so the detailed
 walkthrough later selects `dummy_laser` as one worked node without treating it as the whole demo.
@@ -14,7 +15,7 @@ This is a **prototype tutorial**. It exercises the real robot and the current ob
 NoDL drafts, composition, forward generation, semantic diff, and conformance remain design targets.
 :::
 
-## The finished hero experience (design preview)
+## Proposed complete flow (design preview)
 
 This is the tutorial we want a user to follow once the missing NoDL features exist. Read the commands in this section as
 the proposed product experience, not as commands available on `main` today. The current verified flow later on this
@@ -59,7 +60,7 @@ The resulting document describes the `scan` publisher and its QoS. The system te
 
 ```bash
 ros2 nodl generate nodl/dummy_laser.nodl.yaml --language cpp --output generated/dummy_laser
-colcon build --packages-select nodl_dummy_robot_hero
+colcon build --packages-select nodl_dummy_robot_demo
 ```
 
 Generation creates the ROS interface binding. The existing C++ scan calculation, loop rate, message timestamps, and
@@ -68,7 +69,7 @@ business logic remain application code.
 ### 5. Run and compare the NoDL-forward robot
 
 ```bash
-ros2 launch nodl_dummy_robot_hero dummy_robot.launch.py interface:=nodl
+ros2 launch nodl_dummy_robot_demo dummy_robot.launch.py interface:=nodl
 ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml
 ```
 
@@ -81,7 +82,7 @@ Start a deliberately regressed **conventional** variant. Its launch remaps the r
 `scan_regressed`; the node source remains unchanged.
 
 ```bash
-ros2 launch nodl_dummy_robot_hero dummy_robot.launch.py \
+ros2 launch nodl_dummy_robot_demo dummy_robot.launch.py \
   interface:=conventional scan_remap:=scan_regressed
 ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml
 ```
@@ -93,14 +94,14 @@ launch drift visible without modifying the application source.
 Restart the NoDL-forward variant, rerun conformance, and finish with the working robot in RViz:
 
 ```bash
-ros2 launch nodl_dummy_robot_hero dummy_robot.launch.py interface:=nodl
+ros2 launch nodl_dummy_robot_demo dummy_robot.launch.py interface:=nodl
 ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml
 ```
 
 ## Current implementation details
 
 The remaining material is the executable subset on current `main`. It validates the tutorial’s starting point while the
-full hero experience above defines the capabilities still to implement.
+proposed complete flow above defines the capabilities still to implement.
 
 ### Start the existing robot
 
