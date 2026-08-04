@@ -163,7 +163,7 @@ The overview contains this status table:
 | `dummy_robot` | Prototype verified | `ros2/demos/dummy_robot` |
 | Pendulum | TBD | `ros2/demos/pendulum_control` |
 | ros2_control | TBD | `ros-controls/ros2_control_demos` |
-| Nav2 | TBD | `ros-navigation/navigation2` |
+| Nav2 ControllerServer | Design preview | `ros-navigation/navigation2` |
 
 Each `TBD` entry must include:
 

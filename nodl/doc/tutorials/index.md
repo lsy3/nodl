@@ -8,12 +8,14 @@ These tutorials test how NoDL fits real ROS 2 development workflows. The first p
 
 basics
 dummy-robot
+nav2-controller
 ```
 
 :::{important}
-The **Basics** and **Dummy robot** tutorials have current, executable subsets. NoDL does not yet provide forward
-generation, fragment composition, semantic diff, or expected-versus-observed conformance. Each tutorial separates
-commands that work today from a clearly labelled target workflow.
+The **Basics** and **Dummy robot** tutorials have current, executable subsets. The **Nav2 ControllerServer** tutorial
+is a design preview for composition. NoDL does not yet provide forward generation, fragment composition, semantic
+diff, or expected-versus-observed conformance. Each tutorial separates commands that work today from a clearly
+labelled target workflow.
 :::
 
 ## Available tutorials
@@ -26,6 +28,11 @@ Describe, curate, validate, and register the same small publisher interface in C
 
 Apply the current workflow to a visible robot system, a laser publisher, and TF-related system requirements.
 
+### [Nav2 ControllerServer](nav2-controller.md)
+
+Show how a NoDL document would compose lifecycle, bond, TF, and common Nav2 conventions with a node-specific action
+server and topic endpoints.
+
 ## Tutorial roadmap
 
 Five tutorials remain the target suite. The table distinguishes implemented documentation from planned work.
@@ -36,7 +43,7 @@ Five tutorials remain the target suite. The table distinguishes implemented docu
 | [Dummy robot](dummy-robot.md) | `ros2/demos`: `dummy_robot` | Prototype available | How does the workflow scale to a visible multi-node robot? |
 | Pendulum control | `ros2/demos`: `pendulum_control` | **TBD** | Can NoDL migrate interfaces without owning real-time behavior? |
 | ros2_control | `ros2_control_demos`: Examples 1 and 17 | **TBD** | How do framework-provided capabilities compose? |
-| Nav2 | `navigation2`: C++ provider and Python `BasicNavigator` | **TBD** | Can composition scale across ecosystem bases and languages? |
+| [Nav2 ControllerServer](nav2-controller.md) | `navigation2`: `nav2_controller::ControllerServer` | Design preview | Can composition scale across ecosystem bases? |
 
 <!-- TODO(nodl-tutorials):
 Target: ros2/demos/pendulum_control, with separate pendulum_controller and pendulum_motor documents.
@@ -50,13 +57,6 @@ Target: ros-controls/ros2_control_demos Examples 1 and 17.
 Prerequisites: fragments, logical-node registration, semantic diff, and conformance.
 Proof: detect missing /diagnostics, /rrbot/hardware_status, and separate /rrbot_custom_status interfaces.
 PR boundary: one ros2_control_demos implementation PR plus one NoDL tutorial and locked verification update.
--->
-
-<!-- TODO(nodl-tutorials):
-Target: navigation2 ControllerServer (or approved provider) and nav2_simple_commander.BasicNavigator.
-Prerequisites: fragments, ownership-aware composition, semantic diff, and conformance.
-Proof: verify C++ lifecycle/bond/TF/application interfaces and Python action/service/topic client capabilities.
-PR boundary: one Navigation2 implementation PR plus one NoDL tutorial and locked verification update.
 -->
 
 ## Recommended talk path
