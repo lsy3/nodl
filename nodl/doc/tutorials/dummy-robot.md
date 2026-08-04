@@ -77,16 +77,25 @@ and scan, which makes the migration result visible rather than terminal-only.
 
 ### 6. Demonstrate a meaningful failure
 
-Change the generated `scan` publisher reliability from `RELIABLE` to `BEST_EFFORT`, rebuild, then run:
+Start a deliberately regressed **conventional** variant. Its launch remaps the relative `scan` name to
+`scan_regressed`; the node source remains unchanged.
 
 ```bash
-ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml \
-  --report nodl/dummy_laser.conformance.yaml
-ros2 nodl diff nodl/dummy_laser.nodl.yaml nodl/dummy_laser.conformance.yaml
+ros2 launch nodl_dummy_robot_hero dummy_robot.launch.py \
+  interface:=conventional scan_remap:=scan_regressed
+ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml
 ```
 
-The semantic diff identifies the `scan` publisher and the changed QoS reliability field. Restore the generated binding,
-rerun conformance, and finish with the working robot in RViz.
+RViz is still configured for `/scan`, so the laser display becomes empty. Conformance reports a semantic diff with the
+expected `/scan` publisher missing and the unexpected `/scan_regressed` publisher observed. This makes deployment and
+launch drift visible without modifying the application source.
+
+Restart the NoDL-forward variant, rerun conformance, and finish with the working robot in RViz:
+
+```bash
+ros2 launch nodl_dummy_robot_hero dummy_robot.launch.py interface:=nodl
+ros2 nodl conform /dummy_laser --file nodl/dummy_laser.nodl.yaml
+```
 
 ## Current implementation details
 
@@ -264,14 +273,15 @@ requirement. It keeps node descriptions separate and leaves system membership to
 
 ### Suggested regression
 
-Change the `scan` publisher reliability while keeping its ROS type unchanged. This produces an interface-level QoS
-change without mixing the demonstration with a compile failure. The future conformance output should identify the
-publisher and the changed reliability field.
+In an intentionally broken launch variant, remap `dummy_laser`'s relative `scan` name to `scan_regressed`. RViz remains
+configured for `/scan`, so the missing laser is immediately visible. Future conformance output should identify the
+missing expected `/scan` publisher and unexpected observed `/scan_regressed` publisher. This tests deployment and
+launch drift without modifying C++ application logic.
 
 ### Why work through `dummy_laser`
 
 - It has one clear application endpoint.
 - Its behavior remains meaningful after interface migration.
 - Its output participates in the robot's TF-dependent visualization.
-- A topic or QoS regression is easy to explain.
+- A topic-remapping regression is easy to explain and visible in RViz.
 - The demo can recover to a visually working state.
