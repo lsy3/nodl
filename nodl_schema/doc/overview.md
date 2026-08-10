@@ -22,10 +22,12 @@ The public API is re-exported from the package root:
 from nodl_schema import load_nodl, dump_nodl, load_schema, validate
 ```
 
-### `load_nodl(source) -> NodlDocument`
+### `load_nodl(source, *, resolve=True) -> NodlDocument`
 
 Load and validate a NoDL document from a string, bytes, or file-like object, returning a typed `NodlDocument`.
 Raises a validation error if the document does not conform to the schema.
+
+If `resolve=True`, each `include` reference is resolved and merged in (see [Composition](#composition)), returning a document with the full interface and no `include`.
 
 ```python
 from nodl_schema import load_nodl
@@ -33,8 +35,8 @@ from nodl_schema import load_nodl
 with open('my_node.nodl.yaml') as f:
     doc = load_nodl(f)
 
-for parameter in doc.parameters:
-    print(parameter.name, parameter.type)
+for name, parameter in (doc.parameters or {}).items():
+    print(name, parameter.type)
 ```
 
 ### `validate(data) -> None`
@@ -50,6 +52,30 @@ Serialize a `NodlDocument` (or a plain `dict`) back to a YAML or JSON string.
 ### `load_schema() -> dict`
 
 Load and cache the raw NoDL JSON schema as a `dict`, for tools that want to inspect the schema directly.
+
+(composition)=
+## Composition: the `include` key
+
+A document can pull in the interface of other NoDL documents through a top-level `include` list.
+Each entry is resolved, validated, and merged into the including document when it is loaded:
+
+```yaml
+nodl_version: 2
+include:
+  - ref: nodl://sensor_common/imu_driver
+publishers:
+  - name: /status
+    type: std_msgs/msg/String
+    qos: {history: SYSTEM_DEFAULT, reliability: SYSTEM_DEFAULT}
+```
+
+`ref` is a URI whose scheme selects the resolver that fetches the document.
+`nodl://<package>/<name>` is the built-in form, resolved through the ament index.
+
+Includes are followed recursively.
+Double-inclusions of the same reference (including cycles) are rejected.
+The same entity type with the same name declared twice is an error.
+Resolution failures raise `ResolutionError`, and collisions raise `MergeError`.
 
 ## Data model
 

@@ -28,6 +28,16 @@ properties:
     type: string
     description: Human-readable description of what this node does.
 
+  include:
+    type: array
+    description: |
+      Other NoDL documents whose interface entities are merged into this one.
+      Each reference is resolved - recursively, following all references until done.
+      Circular inclusion is an error.
+      An entity-name collision (for example two publishers named ``/status``) is an error.
+    items:
+      $ref: '#/definitions/reference'
+
   parameters:
     type: object
     description: |
@@ -74,6 +84,23 @@ properties:
       $ref: '#/definitions/action_endpoint'
 
 definitions:
+  reference:
+    type: object
+    description: A reference to another NoDL document.
+    additionalProperties: false
+    required:
+      - ref
+    properties:
+      ref:
+        type: string
+        description: |
+          Reference to a NoDL document, as a ``<scheme>://<body>`` URI.
+          Dynamically egistered resolvers handle these URIs, so the schema does not restrict them.
+          ``nodl://<package>/<name>`` is the built-in resolver which fetches from the ament index.
+        pattern: ^[a-z][a-z0-9+.-]*://[^\s/][^\s]*$
+        examples:
+          - nodl://sensor_common/imu_driver
+
   rosName:
     type: string
     description: |

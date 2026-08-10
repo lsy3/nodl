@@ -8,8 +8,9 @@ import json
 import pytest
 from jsonschema import ValidationError
 
-from nodl_schema import dump_nodl, load_nodl, load_schema, validate
+from nodl_schema import dump_nodl, load_nodl, validate
 from nodl_schema.models import NodlDocument
+from nodl_schema.validation import load_schema
 
 _MIN_QOS = {'history': 'SYSTEM_DEFAULT', 'reliability': 'SYSTEM_DEFAULT'}
 _KEEP_LAST_QOS = {'history': 'KEEP_LAST', 'depth': 10, 'reliability': 'RELIABLE'}
@@ -250,6 +251,82 @@ def test_fragments_no_longer_allowed():
 def test_base_no_longer_allowed():
     with pytest.raises(ValidationError):
         validate({'nodl_version': 2, 'base': 'lifecycle_node'})
+
+
+# ---------------------------------------------------------------------------
+# include (composition references) -- schema shape only; resolution is covered
+# in test_composition.py
+# ---------------------------------------------------------------------------
+
+
+def test_include_nodl_uri_accepted():
+    validate({'nodl_version': 2, 'include': [{'ref': 'nodl://sensor_common/imu_driver'}]})
+
+
+def test_include_empty_list_accepted():
+    validate({'nodl_version': 2, 'include': []})
+
+
+@pytest.mark.parametrize(
+    'ref',
+    [
+        'test://in_memory/doc',  # what a test resolver registers
+        'file://shared/telemetry.nodl.yaml',
+        'https://example.com/shared/telemetry.nodl.yaml',
+    ],
+)
+def test_include_other_scheme_accepted(ref):
+    # Resolvers are registered at runtime, so the schema cannot know which schemes work. It
+    # checks the shape; an unhandled scheme is a resolution error (see test_composition.py).
+    validate({'nodl_version': 2, 'include': [{'ref': ref}]})
+
+
+@pytest.mark.parametrize(
+    'ref',
+    [
+        'nodl://pkg',  # missing name
+        'nodl://pkg/nested/name',  # a registered name has no path separators
+    ],
+)
+def test_include_scheme_specific_shape_is_not_the_schemas_business(ref):
+    # Whether a nodl:// body names a real document is AmentIndexResolver's check, not the
+    # schema's, since the schema has no way to make that check for an arbitrary scheme.
+    validate({'nodl_version': 2, 'include': [{'ref': ref}]})
+
+
+@pytest.mark.parametrize(
+    'ref',
+    [
+        '/absolute/telemetry.nodl.yaml',  # cannot mean the same thing on two machines
+        'common/telemetry.nodl.yaml',  # a bare path names no resolver
+        './telemetry.nodl.yaml',
+        'nodl:///name',  # empty authority
+        'nodl://',
+        '://pkg/name',  # no scheme
+        'nodl:/pkg/name',  # not a URI
+        'has space://pkg/name',
+        '',
+    ],
+)
+def test_include_non_uri_ref_rejected(ref):
+    with pytest.raises(ValidationError):
+        validate({'nodl_version': 2, 'include': [{'ref': ref}]})
+
+
+def test_include_missing_ref_rejected():
+    with pytest.raises(ValidationError):
+        validate({'nodl_version': 2, 'include': [{}]})
+
+
+def test_include_extra_key_rejected():
+    with pytest.raises(ValidationError):
+        validate({'nodl_version': 2, 'include': [{'ref': 'nodl://pkg/x', 'when': 'always'}]})
+
+
+def test_include_bare_string_rejected():
+    # An entry is an object, so there is somewhere to put a second key later.
+    with pytest.raises(ValidationError):
+        validate({'nodl_version': 2, 'include': ['nodl://pkg/x']})
 
 
 def test_invalid_parameter_type():

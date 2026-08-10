@@ -50,6 +50,21 @@ class ArrayType(Enum):
     string_array = 'string_array'
 
 
+class Reference(BaseModel):
+    """
+    A reference to another NoDL document.
+    """
+
+    class Config:
+        extra = Extra.forbid
+
+    ref: constr(regex=r'^[a-z][a-z0-9+.-]*://[^\s/][^\s]*$') = Field(
+        ...,
+        description='Reference to a NoDL document, as a ``<scheme>://<body>`` URI.\nDynamically egistered resolvers handle these URIs, so the schema does not restrict them.\n``nodl://<package>/<name>`` is the built-in resolver which fetches from the ament index.\n',
+        examples=['nodl://sensor_common/imu_driver'],
+    )
+
+
 class History(Enum):
     """
     History policy.
@@ -436,6 +451,10 @@ class NodlDocument(BaseModel):
 
     nodl_version: int = Field(2, const=True, description='NoDL schema major version this document targets.')
     description: Optional[str] = Field(None, description='Human-readable description of what this node does.')
+    include: Optional[list[Reference]] = Field(
+        None,
+        description='Other NoDL documents whose interface entities are merged into this one.\nEach reference is resolved - recursively, following all references until done.\nCircular inclusion is an error.\nAn entity-name collision (for example two publishers named ``/status``) is an error.\n',
+    )
     parameters: Optional[dict[str, ParameterDefinition]] = Field(
         None,
         description='ROS parameters declared by this node, keyed by parameter name.\nParameter shape is borrowed from ``generate_parameter_library``\n(see ``parameter.schema.yaml``).\n',

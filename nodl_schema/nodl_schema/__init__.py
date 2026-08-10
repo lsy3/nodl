@@ -2,6 +2,31 @@
 # SPDX-License-Identifier: Apache-2.0
 """NoDL schema, in-memory models, and validation helpers."""
 
-from nodl_schema.validator import dump_nodl, load_nodl, load_schema, validate
+from nodl_schema.ament_resolver import AmentIndexResolver
+from nodl_schema.composition import (
+    ResolutionError,
+    Resolver,
+    get_resolvers,
+    register_resolver,
+    resolver_registered,
+    unregister_resolver,
+)
+from nodl_schema.loader import dump_nodl, load_nodl, resolve_document
+from nodl_schema.validation import load_schema, validate
 
-__all__ = ['dump_nodl', 'load_nodl', 'load_schema', 'validate']
+register_resolver(AmentIndexResolver())
+
+__all__ = [
+    'AmentIndexResolver',
+    'ResolutionError',
+    'Resolver',
+    'dump_nodl',
+    'load_nodl',
+    'load_schema',
+    'get_resolvers',
+    'register_resolver',
+    'resolve_document',
+    'resolver_registered',
+    'unregister_resolver',
+    'validate',
+]
