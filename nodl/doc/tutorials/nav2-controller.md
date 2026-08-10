@@ -12,8 +12,9 @@ a bond. Its local costmap and plugins also depend on TF.
 
 :::{warning}
 **Not yet implemented.** This walkthrough is the target NoDL product experience. Current NoDL can validate direct
-topic, service, and action endpoints, but it cannot yet compose reusable fragments, model lifecycle state or bond
-ownership, express TF frame semantics, generate bindings, or conform a running node.
+topic, service, and action endpoints and resolve schema-level `include` references. The Nav2 capability documents,
+lifecycle-state and bond-ownership modeling, TF frame semantics, generated bindings, and running-node conformance do
+not exist yet.
 :::
 
 ## Tutorial
@@ -42,19 +43,41 @@ includes the `follow_path` `nav2_msgs/action/FollowPath` action server, `transfo
 `nav_msgs/msg/Path` publisher, `tracking_feedback` `nav2_msgs/msg/TrackingFeedback` publisher, and a
 `nav2_msgs/msg/SpeedLimit` subscription. The resolved document must retain the actual names and QoS from observation.
 
-### 3. Compose framework capabilities with node-owned endpoints
+### 3. Include framework capabilities with node-owned endpoints
+
+The authored document includes reusable Nav2 documents and declares only the controller-specific endpoints. The
+`nav_msgs/msg/Path` publisher is a compact, concrete example of the value: it remains visible at the node level while
+the lifecycle and TF transport contract stays reusable.
+
+```yaml
+# nodl/controller_server.nodl.yaml
+nodl_version: 2
+include:
+  - ref: nodl://nav2_common/lifecycle_node
+  - ref: nodl://nav2_common/bond
+  - ref: nodl://nav2_common/tf_consumer
+  - ref: nodl://nav2_common/controller_qos
+publishers:
+  - name: transformed_global_plan
+    type: nav_msgs/msg/Path
+    qos: {history: SYSTEM_DEFAULT, reliability: SYSTEM_DEFAULT}
+  - name: tracking_feedback
+    type: nav2_msgs/msg/TrackingFeedback
+    qos: {history: SYSTEM_DEFAULT, reliability: SYSTEM_DEFAULT}
+subscriptions:
+  - name: speed_limit
+    type: nav2_msgs/msg/SpeedLimit
+    qos: {history: SYSTEM_DEFAULT, reliability: SYSTEM_DEFAULT}
+action_servers:
+  - name: follow_path
+    type: nav2_msgs/action/FollowPath
+```
 
 ```bash
-ros2 nodl compose nodl/controller_server.observed.nodl.yaml \
-  --base nav2:lifecycle-node \
-  --fragment nav2:bond \
-  --fragment nav2:tf-consumer \
-  --fragment nav2:controller-qos \
-  --output nodl/controller_server.nodl.yaml
 ros2 nodl validate nodl/controller_server.nodl.yaml
 ```
 
-Composition has explicit ownership boundaries:
+Includes merge endpoint documents. The composed contract also has explicit ownership boundaries:
 
 | Capability | Owner | What NoDL describes |
 |---|---|---|
@@ -91,27 +114,29 @@ ros2 nodl conform /controller_server --file nodl/controller_server.nodl.yaml
 Conformance compares expected endpoints and QoS with observation. Separate system checks verify lifecycle state,
 required TF transforms, and a successful `FollowPath` request; they are not inferred merely from endpoint presence.
 
-### 6. Demonstrate a composition failure
+### 6. Demonstrate an include failure
 
-Launch an intentionally incomplete composed variant that omits the Nav2 bond capability, then run conformance:
+Remove `nodl://nav2_common/bond` from the document, launch the intentionally incomplete variant, then run
+conformance:
 
 ```bash
 ros2 nodl conform /controller_server --file nodl/controller_server.nodl.yaml
 ```
 
-The semantic diff attributes the missing bond interface to the `nav2:bond` fragment rather than incorrectly blaming
-`ControllerServer`'s application endpoints. Restore the fragment, reconform, and confirm the node is active.
+The semantic diff attributes the missing bond interface to the missing include rather than incorrectly blaming
+`ControllerServer`'s application endpoints. Restore the include, reconform, and confirm the node is active.
 
 ## What works today
 
 On current `main`, a user can observe `/controller_server` as raw graph data and validate a manually authored document
-containing direct endpoints. The current schema deliberately rejects `base` and `fragments`, and current observation
-does not recover lifecycle state, bond ownership, or semantic TF frame requirements.
+containing direct endpoints. `nodl_schema` can resolve registered `include` references, but the required Nav2
+capability documents are not registered yet. Current observation also does not recover lifecycle state, bond ownership,
+or semantic TF frame requirements.
 
 This tutorial therefore defines the acceptance criteria for future work:
 
 - reusable, versioned Nav2 lifecycle and bond documents;
-- fragment provenance and ownership-aware semantic diffs;
+- include provenance and ownership-aware semantic diffs;
 - observation and conformance for actions and QoS;
 - explicit separation of TF transport endpoints from frame-relationship checks; and
 - C++ binding generation that leaves Nav2 control behavior untouched.
