@@ -12,7 +12,8 @@ a bond. Its local costmap and plugins also depend on TF.
 
 :::{warning}
 **Not yet implemented.** This walkthrough is the target NoDL product experience. Current NoDL can validate direct
-topic, service, and action endpoints and resolve schema-level `include` references. The Nav2 capability documents,
+topic, service, and action endpoints, resolve schema-level `include` references, preserve the include tree, and carry
+opaque `codegen` metadata. The Nav2 capability documents, tools that interpret their metadata and provenance,
 lifecycle-state and bond-ownership modeling, TF frame semantics, generated bindings, and running-node conformance do
 not exist yet. The current ament helper registers executable documents only; this tutorial also assumes a future
 `ament_nodl_register_document()` helper for reusable capability documents.
@@ -52,6 +53,11 @@ stable lifecycle service interface and no controller-specific endpoint:
 ```yaml
 # nav2_common/nodl/lifecycle_node.nodl.yaml
 nodl_version: 2
+codegen:
+  cpp:
+    role: base_class
+    header: nav2_ros_common/lifecycle_node.hpp
+    class: nav2::LifecycleNode
 service_servers:
   - {name: change_state, type: lifecycle_msgs/srv/ChangeState}
   - {name: get_state, type: lifecycle_msgs/srv/GetState}
@@ -71,6 +77,8 @@ ament_nodl_register_document(lifecycle_node
 The same package publishes `bond.nodl.yaml`, `tf_consumer.nodl.yaml`, and `controller_qos.nodl.yaml`. Each document
 contains endpoints that belong to that capability. A future `ament_nodl_register_document()` stores them under the
 same `nodl_nodes` ament resource type that `include` already resolves, using the key `nav2_common__lifecycle_node`.
+The include tree keeps the lifecycle document and its `codegen.cpp` metadata separate from the root controller
+document, so a generator can identify the base class that contributed the lifecycle endpoints.
 
 ### 4. Include framework capabilities with node-owned endpoints
 
@@ -127,8 +135,9 @@ ros2 nodl generate nodl/controller_server.nodl.yaml \
 colcon build --packages-select nav2_controller
 ```
 
-Generation binds declared ROS interfaces to the existing C++ implementation. It does not generate controller plugins,
-local-costmap behavior, TF lookup logic, control-loop timing, real-time scheduling, or recovery behavior.
+Generation resolves the document with its include tree, interprets the included `codegen.cpp` metadata, and binds the
+declared ROS interfaces to the existing C++ implementation. It does not generate controller plugins, local-costmap
+behavior, TF lookup logic, control-loop timing, real-time scheduling, or recovery behavior.
 
 ### 6. Conform a running lifecycle node
 
@@ -159,14 +168,15 @@ The semantic diff attributes the missing bond interface to the missing include r
 
 On current `main`, a user can observe `/controller_server` as raw graph data and validate a manually authored document
 containing direct endpoints. `nodl_schema` can resolve registered `include` references, but the required Nav2
-capability documents and their package-level registration helper are not implemented yet. Current observation also does
-not recover lifecycle state, bond ownership, or semantic TF frame requirements.
+capability documents and their package-level registration helper are not implemented yet. `load_nodl_with_doc_tree()`
+exposes include provenance and `codegen` metadata, but no generator, semantic diff, or conformance tool consumes them.
+Current observation also does not recover lifecycle state, bond ownership, or semantic TF frame requirements.
 
 This tutorial therefore defines the acceptance criteria for future work:
 
 - reusable, versioned Nav2 lifecycle and bond documents;
 - package-level registration of reusable documents;
-- include provenance and ownership-aware semantic diffs;
+- generator, semantic-diff, and conformance use of the existing include tree;
 - observation and conformance for actions and QoS;
 - explicit separation of TF transport endpoints from frame-relationship checks; and
 - C++ binding generation that leaves Nav2 control behavior untouched.
