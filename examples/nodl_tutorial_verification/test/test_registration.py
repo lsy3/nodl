@@ -9,7 +9,7 @@ from ament_index_python.packages import get_package_share_directory
 from ament_index_python.resources import get_resource
 
 PACKAGE = 'nodl_tutorial_verification'
-DOCUMENTS = ('cpp_talker', 'py_talker', 'dummy_laser')
+DOCUMENTS = ('talker', 'dummy_laser')
 
 
 @pytest.mark.parametrize('name', DOCUMENTS)

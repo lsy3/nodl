@@ -9,3 +9,4 @@ publishers:
       history: KEEP_LAST
       depth: 10
       reliability: RELIABLE
+      durability: VOLATILE

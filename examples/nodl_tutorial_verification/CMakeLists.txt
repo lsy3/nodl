@@ -6,8 +6,7 @@ project(nodl_tutorial_verification)
 find_package(ament_cmake REQUIRED)
 find_package(ament_nodl REQUIRED)
 
-ament_nodl_register_node(cpp_talker FILE nodl/cpp_talker.nodl.yaml)
-ament_nodl_register_node(py_talker FILE nodl/py_talker.nodl.yaml)
+ament_nodl_register_node(talker FILE nodl/talker.nodl.yaml)
 ament_nodl_register_node(dummy_laser FILE nodl/dummy_laser.nodl.yaml)
 
 if(BUILD_TESTING)

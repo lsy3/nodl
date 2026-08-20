@@ -1,57 +1,78 @@
-# Nav2 ControllerServer: reusable lifecycle composition
+# Nav2: compose a C++ server and Python client
 
-This tutorial uses Nav2's C++ `nav2_controller::ControllerServer` to show why NoDL needs reusable node-base documents
-and ownership-aware composition. It is a framework composition example, not a replacement for the Dummy robot
-migration tutorial.
+This tutorial uses one real Nav2 example in two ways. The C++ `ControllerServer` demonstrates interfaces inherited
+from a framework base. Python `BasicNavigator` demonstrates a reusable bundle of clients used by a navigation
+application.
 
-The reviewed source is pinned to Navigation2 commit
-[`b356ac1`](https://github.com/ros-navigation/navigation2/blob/b356ac1f8512bcc5f9b595562139f5b02095319b/nav2_controller/src/controller_server.cpp).
-`ControllerServer` derives from `nav2::LifecycleNode`; when configured, it creates the `follow_path` action server,
-`transformed_global_plan` and `tracking_feedback` publishers, and a speed-limit subscription. On activation it creates
-a bond. Its local costmap and plugins also depend on TF.
+```text
+example_nav_to_pose (Python)
+└── BasicNavigator
+    ├── action clients and service clients ──> Nav2 servers
+    └── localization topics
 
-:::{warning}
-**Not yet implemented.** This walkthrough is the target NoDL product experience. Current NoDL can validate direct
-topic, service, and action endpoints, resolve schema-level `include` references, preserve the include tree, and carry
-opaque `codegen` metadata. The Nav2 capability documents, tools that interpret their metadata and provenance,
-lifecycle-state and bond-ownership modeling, TF frame semantics, generated bindings, and running-node conformance do
-not exist yet. The current ament helper registers executable documents only; this tutorial also assumes a future
-`ament_nodl_register_document()` helper for reusable capability documents.
-:::
-
-## Tutorial
-
-### 1. Run a configured Nav2 system
-
-Start a Nav2 bringup with a robot, map, and parameter file suitable for the target environment:
-
-```bash
-ros2 launch nav2_bringup navigation_launch.py \
-  map:=/path/to/map.yaml params_file:=/path/to/nav2_params.yaml
+Nav2 bringup
+└── ControllerServer (C++)
+    ├── nav2::LifecycleNode ──> lifecycle services
+    └── controller interface ────> FollowPath and controller topics
 ```
 
-The target node is `/controller_server`. Its resolved topic names, QoS, and some enabled interfaces depend on the
-Nav2 parameter file and namespace; the tutorial does not treat a source-level default as a runtime guarantee.
+The reviewed sources are pinned to Navigation2 commit `b356ac1`:
 
-### 2. Describe the application-specific interface
+- [`tb3_simulation_launch.py`](https://github.com/ros-navigation/navigation2/blob/b356ac1f8512bcc5f9b595562139f5b02095319b/nav2_bringup/launch/tb3_simulation_launch.py)
+- [`controller_server.cpp`](https://github.com/ros-navigation/navigation2/blob/b356ac1f8512bcc5f9b595562139f5b02095319b/nav2_controller/src/controller_server.cpp)
+- [`robot_navigator.py`](https://github.com/ros-navigation/navigation2/blob/b356ac1f8512bcc5f9b595562139f5b02095319b/nav2_simple_commander/nav2_simple_commander/robot_navigator.py)
+- [`example_nav_to_pose.py`](https://github.com/ros-navigation/navigation2/blob/b356ac1f8512bcc5f9b595562139f5b02095319b/nav2_simple_commander/nav2_simple_commander/example_nav_to_pose.py)
+
+> **Launch → Describe → Compose → Generate → Conform → Attribute**
+
+:::{warning}
+**Capability status:** The upstream launch and examples are real. NoDL `main` can describe running nodes, validate
+direct endpoints, and resolve schema-level `include`. Generated bindings, scoped conformance, and ownership-aware
+reporting below are a draft workflow; they are not implemented on `main`.
+:::
+
+## 1. Launch the official Nav2 example
+
+Start the all-in-one TurtleBot 3 simulation provided by `nav2_bringup`:
+
+```bash
+ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False
+```
+
+This launches the simulator, robot state publisher, Nav2 bringup, lifecycle managers, and RViz. Wait for Nav2 to
+activate, then verify that `/controller_server` is present:
+
+```bash
+ros2 node list
+ros2 lifecycle get /controller_server
+```
+
+The simulation is the shared fixture for both parts below. The tutorial does not invent a replacement Nav2 launch
+file or parameter set.
+
+## Part A: C++ provider composition
+
+`ControllerServer` is the provider-side example. It owns its controller action and topics, while its
+`nav2::LifecycleNode` base owns the standard lifecycle interface.
+
+### 2. Describe the configured ControllerServer
+
+Recover the interface of the node that is actually running in the official example:
 
 ```bash
 ros2 nodl describe /controller_server \
-  --output nodl/controller_server.observed.nodl.yaml
+  -o /tmp/controller_server.observed.nodl.yaml
 ```
 
-The draft records what the configured running node exposes. At minimum, the source-level application interface
-includes the `follow_path` `nav2_msgs/action/FollowPath` action server, `transformed_global_plan`
-`nav_msgs/msg/Path` publisher, `tracking_feedback` `nav2_msgs/msg/TrackingFeedback` publisher, and a
-`nav2_msgs/msg/SpeedLimit` subscription. The resolved document must retain the actual names and QoS from observation.
+The observed document reflects the selected plugins, parameter file, namespace, and ROS distribution. Curate it into
+a teaching contract instead of assuming that source-level defaults describe every deployment.
 
-### 3. Publish reusable Nav2 capability documents
+### 3. Compose the lifecycle base
 
-`nav2_common` publishes one document for each framework capability. For example, the lifecycle document contains the
-stable lifecycle service interface and no controller-specific endpoint:
+The reusable capability declares the endpoints supplied by `nav2::LifecycleNode`:
 
 ```yaml
-# nav2_common/nodl/lifecycle_node.nodl.yaml
+# nav2_ros_common/nodl/lifecycle_node.nodl.yaml
 nodl_version: 2
 codegen:
   cpp:
@@ -59,41 +80,24 @@ codegen:
     header: nav2_ros_common/lifecycle_node.hpp
     class: nav2::LifecycleNode
 service_servers:
-  - {name: change_state, type: lifecycle_msgs/srv/ChangeState}
-  - {name: get_state, type: lifecycle_msgs/srv/GetState}
-  - {name: get_available_states, type: lifecycle_msgs/srv/GetAvailableStates}
-  - {name: get_available_transitions, type: lifecycle_msgs/srv/GetAvailableTransitions}
-  - {name: get_transition_graph, type: lifecycle_msgs/srv/GetAvailableTransitions}
+  - {name: ~/change_state, type: lifecycle_msgs/srv/ChangeState}
+  - {name: ~/get_state, type: lifecycle_msgs/srv/GetState}
+  - {name: ~/get_available_states, type: lifecycle_msgs/srv/GetAvailableStates}
+  - {name: ~/get_available_transitions, type: lifecycle_msgs/srv/GetAvailableTransitions}
+  - {name: ~/get_transition_graph, type: lifecycle_msgs/srv/GetAvailableTransitions}
+publishers:
+  - name: ~/transition_event
+    type: lifecycle_msgs/msg/TransitionEvent
+    qos: {history: SYSTEM_DEFAULT, reliability: SYSTEM_DEFAULT}
 ```
 
-The capability package registers this document by a stable package/document identity:
-
-```cmake
-ament_nodl_register_document(lifecycle_node
-  FILE nodl/lifecycle_node.nodl.yaml
-  PACKAGE nav2_common)
-```
-
-The same package publishes `bond.nodl.yaml`, `tf_consumer.nodl.yaml`, and `controller_qos.nodl.yaml`. Each document
-contains endpoints that belong to that capability. A future `ament_nodl_register_document()` stores them under the
-same `nodl_nodes` ament resource type that `include` already resolves, using the key `nav2_common__lifecycle_node`.
-The include tree keeps the lifecycle document and its `codegen.cpp` metadata separate from the root controller
-document, so a generator can identify the base class that contributed the lifecycle endpoints.
-
-### 4. Include framework capabilities with node-owned endpoints
-
-The authored document includes reusable Nav2 documents and declares only the controller-specific endpoints. The
-`nav_msgs/msg/Path` publisher is a compact, concrete example of the value: it remains visible at the node level while
-the lifecycle and TF transport contract stays reusable.
+The root document includes the capability and declares a deliberately scoped controller surface:
 
 ```yaml
 # nodl/controller_server.nodl.yaml
 nodl_version: 2
 include:
-  - ref: nodl://nav2_common/lifecycle_node
-  - ref: nodl://nav2_common/bond
-  - ref: nodl://nav2_common/tf_consumer
-  - ref: nodl://nav2_common/controller_qos
+  - ref: nodl://nav2_ros_common/lifecycle_node
 publishers:
   - name: transformed_global_plan
     type: nav_msgs/msg/Path
@@ -110,24 +114,24 @@ action_servers:
     type: nav2_msgs/action/FollowPath
 ```
 
+Validate the resolved contract after curation:
+
 ```bash
 ros2 nodl validate nodl/controller_server.nodl.yaml
 ```
 
-Includes merge endpoint documents. The composed contract also has explicit ownership boundaries:
+Preserving the include boundary lets a later diff distinguish an inherited lifecycle failure from a
+controller-owned failure.
 
-| Capability | Owner | What NoDL describes |
-|---|---|---|
-| Lifecycle services and state transitions | `nav2::LifecycleNode` base | Shared lifecycle endpoint contract; not controller behavior |
-| Bond | Nav2 base during activation | Shared bond interface and activation ownership |
-| TF transport | Nav2 base/costmap integration | `/tf` and `/tf_static` topic participation |
-| Frame requirements | System configuration | Required transform relationships, verified separately from topic endpoints |
-| `follow_path` and controller topics | `ControllerServer` | Action and topic interface specific to this node |
+### 4. Generate and conform the provider
 
-The last distinction matters: `/tf` and `/tf_static` do not, by themselves, prove that a configured `map → odom →
-base_link` transform chain exists.
+:::{warning}
+**Draft workflow — not yet implemented.** Generation must interpret the included C++ base metadata. Conformance must
+preserve include provenance and support comparing only the declared teaching scope.
+:::
 
-### 5. Generate the interface binding without generating control behavior
+Generate the interface binding while retaining ControllerServer's plugins, costmap behavior, TF lookups, and control
+loop:
 
 ```bash
 ros2 nodl generate nodl/controller_server.nodl.yaml \
@@ -135,54 +139,171 @@ ros2 nodl generate nodl/controller_server.nodl.yaml \
 colcon build --packages-select nav2_controller
 ```
 
-Generation resolves the document with its include tree, interprets the included `codegen.cpp` metadata, and binds the
-declared ROS interfaces to the existing C++ implementation. It does not generate controller plugins, local-costmap
-behavior, TF lookup logic, control-loop timing, real-time scheduling, or recovery behavior.
-
-### 6. Conform a running lifecycle node
-
-Bring the node through its configured lifecycle transition, then verify its interface:
+Launch the same TurtleBot example with the NoDL-forward ControllerServer, then compare its declared surface:
 
 ```bash
-ros2 lifecycle set /controller_server configure
-ros2 lifecycle set /controller_server activate
-ros2 nodl conform /controller_server --file nodl/controller_server.nodl.yaml
+ros2 launch nav2_bringup tb3_simulation_launch.py \
+  headless:=False controller_interface:=nodl
+ros2 nodl conform /controller_server \
+  --file nodl/controller_server.nodl.yaml --scope declared
 ```
 
-Conformance compares expected endpoints and QoS with observation. Separate system checks verify lifecycle state,
-required TF transforms, and a successful `FollowPath` request; they are not inferred merely from endpoint presence.
+`--scope declared` compares every declared endpoint without treating parameter-dependent or infrastructure endpoints
+outside this teaching contract as failures. A strict comparison requires a complete contract curated from this
+fixture's observed document.
 
-### 7. Demonstrate an include failure
+### 5. Attribute a provider failure
 
-Remove `nodl://nav2_common/bond` from the document, launch the intentionally incomplete variant, then run
-conformance:
+A small test probe is still useful, but it is now only the failure lab. Its normal variant exposes the selected
+controller endpoints through the generated lifecycle base. Its `base:=plain` variant keeps the controller endpoints
+but derives from `rclcpp::Node`, omitting the inherited lifecycle capability.
 
 ```bash
-ros2 nodl conform /controller_server --file nodl/controller_server.nodl.yaml
+ros2 launch nodl_nav2_controller_test controller_contract_probe.launch.py base:=plain
+ros2 nodl conform /controller_server \
+  --file nodl/controller_server.nodl.yaml --scope declared
 ```
 
-The semantic diff attributes the missing bond interface to the missing include rather than incorrectly blaming
-`ControllerServer`'s application endpoints. Restore the include, reconform, and confirm the node is active.
+Expected ownership-aware result:
 
-## What works today
+```text
+FAIL: /controller_server/change_state is missing
+  declared by: nodl://nav2_ros_common/lifecycle_node
+  capability: nav2::LifecycleNode
+```
 
-On current `main`, a user can observe `/controller_server` as raw graph data and validate a manually authored document
-containing direct endpoints. `nodl_schema` can resolve registered `include` references, but the required Nav2
-capability documents and their package-level registration helper are not implemented yet. `load_nodl_with_doc_tree()`
-exposes include provenance and `codegen` metadata, but no generator, semantic diff, or conformance tool consumes them.
-Current observation also does not recover lifecycle state, bond ownership, or semantic TF frame requirements.
+The probe isolates an otherwise difficult regression. It does not replace the real Nav2 system used in steps 1–4.
 
-This tutorial therefore defines the acceptance criteria for future work:
+## Part B: Python client capabilities
 
-- reusable, versioned Nav2 lifecycle and bond documents;
-- package-level registration of reusable documents;
-- generator, semantic-diff, and conformance use of the existing include tree;
-- observation and conformance for actions and QoS;
-- explicit separation of TF transport endpoints from frame-relationship checks; and
-- C++ binding generation that leaves Nav2 control behavior untouched.
+:::{admonition} Optional section under review
+This section tests whether the Nav2 tutorial benefits from showing both sides of the same running system. It can be
+removed later without changing the ControllerServer tutorial above.
+:::
 
-## Why ControllerServer is the composition example
+`BasicNavigator` is not another server. It is a Python `rclpy.node.Node` that bundles action clients, service clients,
+an initial-pose publisher, and an AMCL-pose subscription into a reusable navigation API.
 
-`ControllerServer` has a compact node-specific surface but inherits meaningful framework behavior. That makes it a
-useful test of whether NoDL composition adds real information: the result must identify what comes from Nav2, what
-comes from the controller, and what remains a system-level operational requirement.
+### 6. Run and describe the upstream Python example
+
+With the TurtleBot simulation still running, start Nav2's installed example:
+
+```bash
+ros2 run nav2_simple_commander example_nav_to_pose
+```
+
+While the robot is navigating, recover the client-side graph interface:
+
+```bash
+ros2 nodl describe /basic_navigator \
+  -o /tmp/basic_navigator.observed.nodl.yaml
+```
+
+This is a different view of the same system. `/controller_server` provides actions and topics; `/basic_navigator`
+consumes capabilities from several Nav2 servers. Presence of an action client does not prove that a goal succeeds.
+
+### 7. Compose reusable client capabilities
+
+Instead of repeating every client in each Python navigation application, group them by purpose:
+
+```yaml
+# nav2_simple_commander/nodl/navigation_actions.nodl.yaml
+nodl_version: 2
+action_clients:
+  - {name: navigate_to_pose, type: nav2_msgs/action/NavigateToPose}
+  - {name: follow_path, type: nav2_msgs/action/FollowPath}
+  - {name: compute_path_to_pose, type: nav2_msgs/action/ComputePathToPose}
+```
+
+```yaml
+# nav2_simple_commander/nodl/localization_client.nodl.yaml
+nodl_version: 2
+publishers:
+  - name: initialpose
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    qos: {history: KEEP_LAST, depth: 10, reliability: RELIABLE, durability: VOLATILE}
+subscriptions:
+  - name: amcl_pose
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    qos: {history: KEEP_LAST, depth: 1, reliability: RELIABLE, durability: TRANSIENT_LOCAL}
+```
+
+The `BasicNavigator` document composes those capabilities and adds selected service clients:
+
+```yaml
+# nodl/basic_navigator.nodl.yaml
+nodl_version: 2
+include:
+  - ref: nodl://nav2_simple_commander/navigation_actions
+  - ref: nodl://nav2_simple_commander/localization_client
+service_clients:
+  - name: map_server/load_map
+    type: nav2_msgs/srv/LoadMap
+  - name: global_costmap/clear_entirely_global_costmap
+    type: nav2_msgs/srv/ClearEntireCostmap
+  - name: local_costmap/clear_entirely_local_costmap
+    type: nav2_msgs/srv/ClearEntireCostmap
+```
+
+This is deliberately a teaching scope. The production `BasicNavigator` also creates clients for waypoint following,
+route tracking, smoothing, docking, recoveries, costmap queries, collision monitoring, and lifecycle management.
+
+:::{note} Includes describe a static interface profile, not an available Nav2 mode
+Nav2 deployments enable different capability subsets. A localization deployment, a SLAM deployment, and a system
+with docking or route tracking do not necessarily run the same servers.
+
+Including `navigation_actions` above means that those client endpoints belong to the resolved
+`BasicNavigator` contract and generated binding. It does **not** mean that matching action servers are running, or
+that a navigation goal will succeed. These are three separate claims:
+
+1. the client endpoint is created;
+2. a compatible server is available in this deployment; and
+3. the requested behavior succeeds.
+
+NoDL version 2 includes are static; they do not select fragments from runtime Nav2 configuration. Model deployment
+variants as explicit root documents instead. For example, a core profile can include `navigation_actions` and
+`localization_client`, while a fuller profile can additionally include fragments such as `route_client`,
+`docking_client`, or `gps_waypoint_client`. Conformance checks the selected graph contract. Nav2 launch and behavior
+tests check server availability and successful operation.
+:::
+
+### 8. Generate and conform the Python client
+
+:::{warning}
+**Draft workflow — not yet implemented.** Python generation must compose client capabilities and leave goal creation,
+feedback handling, cancellation, and task-result policy in `BasicNavigator`.
+:::
+
+```bash
+ros2 nodl generate nodl/basic_navigator.nodl.yaml \
+  --language python --output generated/basic_navigator
+colcon build --packages-select nodl_nav2_client_demo
+ros2 run nodl_nav2_client_demo example_nav_to_pose
+ros2 nodl conform /basic_navigator \
+  --file nodl/basic_navigator.nodl.yaml --scope declared
+```
+
+Generation owns the selected action, service, publisher, and subscription declarations. The existing Python methods
+still construct goals, wait for servers, process feedback, cancel tasks, and interpret results.
+
+For a client-side regression, omit the generated `follow_path` action client while leaving the contract unchanged.
+Conformance should report the missing client and attribute it to
+`nodl://nav2_simple_commander/navigation_actions`. The robot need not fail visibly until an application attempts to
+use that capability.
+
+## 9. Keep graph contracts and system behavior separate
+
+Both parts use the same boundary:
+
+| Requirement | NoDL graph contract? | Separate system check? |
+|---|---|---|
+| Expose the ControllerServer lifecycle services | Yes | No |
+| Reach and remain in the active lifecycle state | No | Lifecycle integration test |
+| Create a `follow_path` server or client | Yes | No |
+| Accept and complete a navigation goal | No | Nav2 behavior test |
+| Publish or subscribe to `/tf` and `/tf_static` | Yes | No |
+| Provide `map → odom → base_link` | No | TF lookup or system test |
+| Create a bond while active | Partly, when its endpoints are declared | Bond-state integration test |
+
+The C++ section asks which framework layer owns a provider endpoint. The optional Python section asks whether a
+reusable client capability can prevent every navigation application from restating the same interface.
