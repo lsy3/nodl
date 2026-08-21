@@ -24,6 +24,7 @@ PACKAGES = [
     'nodl_observe',
     'ros2nodl',
     'ament_nodl',
+    'ament_nodl_conformance',
     'nodl_common_interfaces',
     'nodl_generator_cpp',
     'nodl_docgen',
