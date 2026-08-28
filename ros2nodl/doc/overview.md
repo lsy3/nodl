@@ -17,6 +17,16 @@ conformance
 
 Running `ros2 nodl` with no verb prints help. The available verbs:
 
+### `ros2 nodl conform`
+
+Check a running node against an explicit NoDL document.
+
+```console
+ros2 nodl conform /robot/my_node --file nodl/my_node.nodl.yaml
+```
+
+See the [Conform guide](conformance.md) for composition, diagnostics, and exit behavior.
+
 ### `ros2 nodl validate [files...]`
 
 Validate one or more NoDL documents against the NoDL schema.
@@ -49,12 +59,6 @@ ros2 nodl describe /ns/talker --from talker.mcap -o talker.json
 ```
 
 See the [Describe guide](describe.md) for each option and the ROS-to-NoDL mapping.
-
-## Runtime conformance API
-
-The [Conformance guide](conformance.md) documents the Python API that compares
-an explicit NoDL contract with a fresh description of a running node. This is a
-library API; this release does not add a `ros2 nodl conform` command.
 
 ## Relationship to other packages
 

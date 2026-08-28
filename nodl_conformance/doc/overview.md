@@ -56,4 +56,4 @@ case produces an `unverifiable` difference.
 ## Runtime integration
 
 `ros2nodl` loads and composes the expected document, describes a live node, and
-calls this comparator.
+calls this comparator through `ros2 nodl conform`.

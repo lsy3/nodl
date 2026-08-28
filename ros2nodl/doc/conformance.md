@@ -1,30 +1,13 @@
-# Check conformance from Python
+# Conform
 
-`ros2nodl.conformance` manages the runtime part of a conformance check. It loads
-and composes an explicit NoDL file, describes the running node, and passes the
-two documents to `nodl_conformance.diff`.
+Check whether a running node conforms to an explicit NoDL document:
 
-Use `check_conformance` when code must inspect each difference:
-
-```python
-from ros2nodl.conformance import check_conformance
-
-differences = check_conformance(
-    nodl_file='nodl/my_node.nodl.yaml',
-    node_fqn='/robot/my_node',
-    timeout_sec=15.0,
-)
+```console
+ros2 nodl conform NODE_NAME --file FILE [--timeout SEC]
 ```
 
-Use `assert_conforms` when an aggregated `AssertionError` is more convenient:
-
-```python
-from ros2nodl.conformance import assert_conforms
-
-assert_conforms(
-    nodl_file='nodl/my_node.nodl.yaml',
-    node_fqn='/robot/my_node',
-)
+```console
+ros2 nodl conform /robot/my_node --file nodl/my_node.nodl.yaml
 ```
 
 The file is the explicit root contract. Its `include` references are resolved
@@ -35,5 +18,6 @@ the check before runtime observation. A description failure stops comparison.
 Description gaps become `unverifiable` differences with their original path and
 reason. Semantic differences are aggregated and sorted for stable diagnostics.
 
-This API deliberately does not infer a document from the `nodl_nodes` resource
-index and does not add a `ros2 nodl conform` command.
+The command exits zero when the node conforms. Otherwise, it prints every
+difference and exits nonzero. It does not infer a document from the `nodl_nodes`
+resource index.
