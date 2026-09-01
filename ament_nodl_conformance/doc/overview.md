@@ -2,6 +2,8 @@
 
 `ament_nodl_conformance` provides optional CMake and launch-test integration for
 checking one ROS 2 executable against one explicit NoDL document.
+It registers a test that runs with `colcon test`; it does not affect normal node
+execution.
 
 Add the test dependency to `package.xml`:
 
@@ -23,6 +25,14 @@ if(BUILD_TESTING)
     TIMEOUT 15
   )
 endif()
+```
+
+After building the package, run the conformance test with the package's other
+tests:
+
+```console
+colcon test --packages-select my_package
+colcon test-result --verbose
 ```
 
 `EXECUTABLE`, `NODL_FILE`, and `NODE_NAME` are required. `PACKAGE` defaults to
