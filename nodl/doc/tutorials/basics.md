@@ -7,12 +7,6 @@ Application behavior remains ordinary ROS code.
 
 Choose C++ or Python in any language tab. The browser remembers that choice for the other grouped tabs on this page.
 
-:::{note} Capability status
-`describe`, `validate`, and the underlying C++ generator work on NoDL `main`.
-The unified generation command, Python generation, generated APIs, and conformance flow below show the intended
-product experience and are not implemented on `main` yet.
-:::
-
 ## 1. Describe the existing interface
 
 Start one upstream talker and describe it from a second terminal.
@@ -68,27 +62,24 @@ application behavior.
 
 ## 3. Generate a binding
 
-:::{warning} Draft workflow: not yet implemented
-The unified commands and generated APIs in sections 3 through 5 show the intended product experience.
-The underlying C++ generator exists, but this complete cross-language workflow is not available on NoDL `main`.
-:::
-
 Use the same NoDL file regardless of language.
 
 ::::{tabs}
 :::{group-tab} C++
 
 ```bash
-ros2 nodl generate \
-  examples/nodl_tutorials/basics/nodl/talker.nodl.yaml \
-  --language cpp --output generated/cpp_talker
+colcon build --packages-select nodl_tutorial_basics
+source install/setup.bash
 ```
 
-The generated C++ base exposes the declared publisher as `pub_chatter_`.
+The package uses `nodl_generate_cpp()` to generate a C++ base with the declared publisher as `pub_chatter_`.
 
 :::
 
 :::{group-tab} Python
+
+**Warning: Python generation is not yet implemented.**
+The Python commands and generated API in sections 3 through 5 show the intended product experience.
 
 ```bash
 ros2 nodl generate \
@@ -127,18 +118,15 @@ NoDL does not generate the timer period, counter, message contents, or logging i
 
 ## 5. Test a running implementation for conformance
 
-:::{warning} Draft command: not yet implemented
-`ros2 nodl conform` is proposed tutorial UX. NoDL `main` does not provide this command yet.
-:::
-
-Build and start the selected implementation, then compare its observed interface with the shared contract.
+Start the selected implementation, then compare its observed interface with the shared contract.
 
 ::::{tabs}
 :::{group-tab} C++
 
 ```bash
-colcon build --packages-select nodl_tutorial_cpp_talker
-ros2 run nodl_tutorial_cpp_talker talker
+# Terminal 1
+ros2 run nodl_tutorial_basics talker_cpp
+# Terminal 2
 ros2 nodl conform /talker \
   --file examples/nodl_tutorials/basics/nodl/talker.nodl.yaml
 ```
@@ -149,7 +137,9 @@ ros2 nodl conform /talker \
 
 ```bash
 colcon build --packages-select nodl_tutorial_python_talker
+# Terminal 1
 ros2 run nodl_tutorial_python_talker talker
+# Terminal 2
 ros2 nodl conform /talker \
   --file examples/nodl_tutorials/basics/nodl/talker.nodl.yaml
 ```
@@ -157,19 +147,25 @@ ros2 nodl conform /talker \
 :::
 ::::
 
-For an intentional QoS regression, first ensure that the generated publisher enables ROS QoS overrides.
-Then restart the talker with the ROS parameter
-`qos_overrides./chatter.publisher.reliability:=best_effort`, leaving the NoDL contract unchanged.
-Conformance should identify:
+The conforming result is:
 
 ```text
-[mismatch] publishers '/chatter'.qos.reliability
-  expected: RELIABLE
-  observed: BEST_EFFORT
+/talker: conforms
 ```
 
-Restore `RELIABLE` before the next run. Topic-name, durability, history, and depth variants follow the same pattern.
+For an intentional regression, remap the generated publisher and leave the NoDL contract unchanged:
 
-This regression is a target acceptance case, not an executable fixture in this PR.
-Before the command is presented as runnable, CI must start the generated node, verify its observed publisher QoS, and
-assert the expected conformance failure on each supported ROS and RMW combination.
+```bash
+# Terminal 1
+ros2 run nodl_tutorial_basics talker_cpp --ros-args -r chatter:=chatter_regressed
+# Terminal 2
+ros2 nodl conform /talker \
+  --file examples/nodl_tutorials/basics/nodl/talker.nodl.yaml
+```
+
+```text
+[missing] publishers '/chatter': expected type 'example_interfaces/msg/String' was not observed
+[extra] publishers '/chatter_regressed': observed undeclared type 'example_interfaces/msg/String'
+```
+
+Restart the talker without the remapping to restore conformance.
