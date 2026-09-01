@@ -23,7 +23,6 @@ ament_nodl_register(json_node FILE test/fixtures/json_node.nodl.json)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
-  find_package(ament_nodl_conformance REQUIRED)
   find_package(rcl_interfaces REQUIRED)
   find_package(rclcpp REQUIRED)
   find_package(std_msgs REQUIRED)
