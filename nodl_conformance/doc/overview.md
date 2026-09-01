@@ -54,9 +54,7 @@ Parameters are named configuration entries exposed by a node.
 | Read-only | A declared `read_only` value must match. An unknown actual value is `unverifiable`. |
 | Ignored fields | Description, default value, additional constraints, validation rules, and the actual current value do not affect the result. |
 
-## Runtime and package-test integration
+## Runtime integration
 
 `ros2nodl` loads and composes the expected document, describes a live node, and
 calls this comparator through `ros2 nodl conform`.
-The small `ament_nodl_conformance` package provides
-optional CMake and launch-test integration for ROS packages.

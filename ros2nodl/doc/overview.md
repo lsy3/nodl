@@ -65,4 +65,3 @@ See the [Describe guide](describe.md) for each option and the ROS-to-NoDL mappin
 `ros2 nodl validate` is a thin CLI wrapper over `nodl_schema`'s validator.
 For programmatic validation or for building tools on top of the typed data model, depend on `nodl_schema` directly.
 For registering a node's NoDL document with the ament index from a CMake package, see the `ament_nodl` package.
-For launch-test integration, see the `ament_nodl_conformance` package.
