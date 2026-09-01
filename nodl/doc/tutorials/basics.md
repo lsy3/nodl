@@ -94,8 +94,21 @@ The generated C++ base exposes the declared publisher as `pub_chatter_`.
 
 :::{warning}
 Python generation is not yet implemented.
-It should be integrated into the package's ament build when support becomes available.
+The CMake below shows the intended package-build integration and cannot be run yet.
 :::
+
+```cmake
+find_package(ament_nodl REQUIRED)
+find_package(nodl_generator_py REQUIRED)
+
+ament_nodl_register(talker FILE nodl/talker.nodl.yaml)
+nodl_generate_py(talker nodl/talker.nodl.yaml)
+```
+
+```bash
+colcon build --packages-select nodl_tutorial_python_talker
+source install/setup.bash
+```
 
 :::
 ::::
