@@ -22,6 +22,7 @@ setup(
             'ros2nodl.verb = ros2nodl.verb:VerbExtension',
         ],
         'ros2nodl.verb': [
+            'conform = ros2nodl.verb.conform:ConformVerb',
             'describe = ros2nodl.verb.describe:DescribeVerb',
             'rewrite = ros2nodl.verb.rewrite:RewriteVerb',
             'validate = ros2nodl.verb.validate:ValidateVerb',
