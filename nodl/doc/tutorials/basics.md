@@ -92,9 +92,10 @@ The generated C++ base exposes the declared publisher as `pub_chatter_`.
 
 :::{group-tab} Python
 
-**Warning: Python generation is not yet implemented.**
-The Python examples in sections 4 and 5 are illustrative and cannot be run yet.
-Python generation should be integrated into the package's ament build when support becomes available.
+:::{warning}
+Python generation is not yet implemented.
+It should be integrated into the package's ament build when support becomes available.
+:::
 
 :::
 ::::
@@ -113,6 +114,11 @@ Subclass the generated interface and keep the timer and message behavior in norm
 :::
 
 :::{group-tab} Python
+
+:::{warning}
+Python generation is not yet implemented.
+The code below shows the intended generated API and cannot be run yet.
+:::
 
 ```{literalinclude} ../../../examples/nodl_tutorials/basics/python/talker.py
 :language: python
@@ -141,6 +147,11 @@ ros2 nodl conform /talker \
 :::
 
 :::{group-tab} Python
+
+:::{warning}
+Python generation is not yet implemented.
+The commands below show the intended workflow and cannot be run yet.
+:::
 
 ```bash
 colcon build --packages-select nodl_tutorial_python_talker
