@@ -60,34 +60,41 @@ ros2 nodl validate examples/nodl_tutorials/basics/nodl/talker.nodl.yaml
 The contract owns the publisher declaration. The timer, counter, log message, and `Hello World` contents remain
 application behavior.
 
-## 3. Generate a binding
+## 3. Register and generate in the package build
 
-Use the same NoDL file regardless of language.
+Keep NoDL validation, registration, generation, and installation in the package build.
+Use the same NoDL contract regardless of language.
 
 ::::{tabs}
 :::{group-tab} C++
+
+Add the contract and C++ generator to the package's `CMakeLists.txt`:
+
+```{literalinclude} ../../../examples/nodl_tutorials/basics/CMakeLists.txt
+:language: cmake
+:start-at: find_package(ament_nodl REQUIRED)
+:end-at: DESTINATION lib/${PROJECT_NAME})
+```
+
+`ament_nodl_register()` validates the public contract and registers it in the ament index.
+`nodl_generate_cpp()` generates the C++ base and rebuilds it when the contract changes.
+
+Build and source the package:
 
 ```bash
 colcon build --packages-select nodl_tutorial_basics
 source install/setup.bash
 ```
 
-The package uses `nodl_generate_cpp()` to generate a C++ base with the declared publisher as `pub_chatter_`.
+The generated C++ base exposes the declared publisher as `pub_chatter_`.
 
 :::
 
 :::{group-tab} Python
 
 **Warning: Python generation is not yet implemented.**
-The Python commands and generated API in sections 3 through 5 show the intended product experience.
-
-```bash
-ros2 nodl generate \
-  examples/nodl_tutorials/basics/nodl/talker.nodl.yaml \
-  --language python --output generated/python_talker
-```
-
-The generated Python base exposes the same publisher as `pub_chatter`.
+The Python examples in sections 4 and 5 are illustrative and cannot be run yet.
+Python generation should be integrated into the package's ament build when support becomes available.
 
 :::
 ::::
