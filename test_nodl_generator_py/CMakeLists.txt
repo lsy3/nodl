@@ -9,11 +9,11 @@ find_package(nodl_generator_py REQUIRED)
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
 
-  nodl_generate_py(pubsub_node fixtures/pubsub_node.nodl.yaml)
-  set(_test_pythonpath "${CMAKE_CURRENT_BINARY_DIR}/nodl_generated/pubsub_node")
+  nodl_generate_py(interfaces_node fixtures/interfaces_node.nodl.yaml)
+  set(_test_pythonpath "${CMAKE_CURRENT_BINARY_DIR}/nodl_generated/interfaces_node")
   string(APPEND _test_pythonpath ":${CMAKE_CURRENT_SOURCE_DIR}/derived")
   ament_add_pytest_test(
-    test_pubsub test/test_pubsub.py
+    test_interfaces test/test_interfaces.py
     APPEND_ENV PYTHONPATH=${_test_pythonpath}
   )
 endif()
