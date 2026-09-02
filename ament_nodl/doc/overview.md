@@ -63,6 +63,8 @@ if(BUILD_TESTING)
 endif()
 ```
 
+### Running the test
+
 After building the package, run the conformance test with its other tests:
 
 ```console
@@ -70,12 +72,18 @@ colcon test --packages-select my_package
 colcon test-result --verbose
 ```
 
-`EXECUTABLE`, `NODL_FILE`, and `NODE_NAME` are required.
-`PACKAGE` defaults to `${PROJECT_NAME}`.
-`NODE_NAMESPACE` defaults to `/`.
-`TIMEOUT` defaults to 15 seconds and must be a positive integer.
+### Arguments
 
-`NODL_FILE` can be absolute or relative to the current source directory.
+:`test_name`: Name of the registered launch test. Required.
+:`EXECUTABLE`: Name of the ROS 2 executable to launch. Required.
+:`NODL_FILE`: Path to the expected NoDL document. Absolute, or relative to `CMAKE_CURRENT_SOURCE_DIR`. Required.
+:`NODE_NAME`: Node name passed to the executable and used to construct its fully qualified name. Required.
+:`PACKAGE`: Package containing the executable. Defaults to `${PROJECT_NAME}`.
+:`NODE_NAMESPACE`: Namespace passed to the executable. Defaults to `/`.
+:`TIMEOUT`: Maximum time in seconds for the conformance check. Defaults to 15 and must be a positive integer.
+
+### Behavior
+
 The macro rejects a missing file during CMake configuration.
 It generates a launch test in the build tree, launches the target node, and
 calls `ros2nodl.conformance.assert_conforms`.
