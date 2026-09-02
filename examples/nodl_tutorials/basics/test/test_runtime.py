@@ -5,6 +5,7 @@
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
@@ -31,10 +32,10 @@ def _contract():
     return share / 'nodl' / 'talker.nodl.yaml'
 
 
-def _run_conform(*node_arguments):
-    ros2 = shutil.which('ros2')
-    assert ros2 is not None
-
+# Each case owns one node and makes one CLI assertion, so a context manager keeps
+# the lifecycle clearer than a launch_testing description would.
+@contextmanager
+def _running_node(*node_arguments):
     node = subprocess.Popen(
         [_node_executable(), *node_arguments],
         env=_test_environment(),
@@ -42,6 +43,21 @@ def _run_conform(*node_arguments):
         stderr=subprocess.DEVNULL,
     )
     try:
+        yield
+    finally:
+        node.terminate()
+        try:
+            node.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            node.kill()
+            node.wait()
+
+
+def _run_conform(*node_arguments):
+    ros2 = shutil.which('ros2')
+    assert ros2 is not None
+
+    with _running_node(*node_arguments):
         return subprocess.run(
             [ros2, 'nodl', 'conform', NODE_NAME, '--file', _contract(), '--timeout', '10'],
             env=_test_environment(),
@@ -50,13 +66,6 @@ def _run_conform(*node_arguments):
             timeout=20,
             check=False,
         )
-    finally:
-        node.terminate()
-        try:
-            node.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            node.kill()
-            node.wait()
 
 
 def test_generated_node_conforms():
