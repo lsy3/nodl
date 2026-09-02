@@ -19,6 +19,7 @@ install(TARGETS talker_cpp
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(tutorial_registration_tests test/test_registration.py)
+  ament_add_pytest_test(tutorial_runtime_tests test/test_runtime.py TIMEOUT 90)
 endif()
 
 ament_package()
