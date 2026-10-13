@@ -9,7 +9,7 @@ No ROS installation or custom NoDL extension is required for these editor featur
 Install the Red Hat YAML extension.
 Copy the following settings into your workspace's `.vscode/settings.json`, merging `yaml.schemas` if you already associate other schemas:
 
-```{literalinclude} ../../examples/editor/settings.json
+```{literalinclude} ../../tools/editor/examples/settings.json
 :language: json
 ```
 
@@ -19,13 +19,13 @@ Hover over `nodl_version` to see its description.
 
 For example, this document has no schema diagnostics:
 
-```{literalinclude} ../../examples/editor/valid.nodl.yaml
+```{literalinclude} ../../tools/editor/examples/valid.nodl.yaml
 :language: yaml
 ```
 
 This intentionally invalid document reports an unknown field, an unsupported parameter type (`float`), and a missing QoS `depth` for `KEEP_LAST`:
 
-```{literalinclude} ../../examples/editor/invalid.nodl.yml
+```{literalinclude} ../../tools/editor/examples/invalid.nodl.yml
 :language: yaml
 ```
 
@@ -63,7 +63,7 @@ The YAML schemas are canonical.
 Regenerate their JSON copies from the repository root after changing a schema:
 
 ```bash
-python3 tools/export_editor_schemas.py --output nodl_schema/nodl_schema/schemas nodl_schema/nodl_schema/schemas/nodl.schema.yaml nodl_schema/nodl_schema/schemas/parameter.schema.yaml
+python3 tools/editor/export_schemas.py --output nodl_schema/nodl_schema/schemas nodl_schema/nodl_schema/schemas/nodl.schema.yaml nodl_schema/nodl_schema/schemas/parameter.schema.yaml
 ```
 
 The exporter requires PyYAML.

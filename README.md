@@ -10,7 +10,7 @@ Find complete documentation at https://nodl.readthedocs.io/en/latest/
 
 Follow the [ROS 2 basics tutorial](https://nodl.readthedocs.io/en/latest/tutorials/basics.html) to define a node interface, generate bindings, and check conformance.
 Set up [editor completion and validation](https://nodl.readthedocs.io/en/latest/editor.html) for `*.nodl.yaml` and `*.nodl.yml` before authoring your first document.
-The [workspace settings](./examples/editor/settings.json) are ready to copy into `.vscode/settings.json`.
+The [workspace settings](./tools/editor/examples/settings.json) are ready to copy into `.vscode/settings.json`.
 
 ## Repository structure
 

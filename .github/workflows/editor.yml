@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install pytest pyyaml jsonschema
-      - run: python -m pytest -q tools/tests/test_editor_schemas.py
+      - run: python -m pytest -q tools/editor/test_export.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

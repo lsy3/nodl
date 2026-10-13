@@ -10,7 +10,7 @@ const { TextDocument } = require('vscode-languageserver-textdocument');
 
 const root = path.resolve(__dirname, '../..');
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8');
-const settings = JSON.parse(read('examples/editor/settings.json'));
+const settings = JSON.parse(read('tools/editor/examples/settings.json'));
 const schemas = Object.entries(settings['yaml.schemas']).map(([uri, fileMatch]) => ({ uri, fileMatch }));
 const base = schemas[0].uri.slice(0, schemas[0].uri.lastIndexOf('/') + 1);
 const requested = new Set();
@@ -29,8 +29,8 @@ const document = (text, filename = 'example.nodl.yaml') =>
 
 for (const filename of ['example.nodl.yaml', 'example.nodl.yml', 'nodes/example.nodl.yaml', 'nodes/example.nodl.yml']) {
   test(`settings associate ${filename} and resolve parameter references`, async () => {
-    assert.deepEqual(await service.doValidation(document(read('examples/editor/valid.nodl.yaml'), filename)), []);
-    const diagnostics = await service.doValidation(document(read('examples/editor/invalid.nodl.yml'), filename));
+    assert.deepEqual(await service.doValidation(document(read('tools/editor/examples/valid.nodl.yaml'), filename)), []);
+    const diagnostics = await service.doValidation(document(read('tools/editor/examples/invalid.nodl.yml'), filename));
     for (const line of [2, 5, 9]) {
       assert.ok(diagnostics.some((item) => item.range.start.line === line), JSON.stringify(diagnostics));
     }
@@ -57,6 +57,6 @@ for (const [name, text, expected] of [
 }
 
 test('hover shows canonical field documentation', async () => {
-  const hover = await service.doHover(document(read('examples/editor/valid.nodl.yaml')), { line: 1, character: 5 });
+  const hover = await service.doHover(document(read('tools/editor/examples/valid.nodl.yaml')), { line: 1, character: 5 });
   assert.match(JSON.stringify(hover), /NoDL schema major version/);
 });

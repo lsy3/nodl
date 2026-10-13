@@ -13,7 +13,7 @@ SCHEMAS = ROOT / 'nodl_schema/nodl_schema/schemas'
 
 
 def test_published_schemas_are_current(tmp_path):
-    spec = importlib.util.spec_from_file_location('export_editor_schemas', ROOT / 'tools/export_editor_schemas.py')
+    spec = importlib.util.spec_from_file_location('export_schemas', ROOT / 'tools/editor/export_schemas.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.export_schemas(sorted(SCHEMAS.glob('*.yaml')), tmp_path)
@@ -24,7 +24,7 @@ def test_published_schemas_are_current(tmp_path):
 
 
 def test_export_preserves_fragments_and_unrelated_references(tmp_path):
-    spec = importlib.util.spec_from_file_location('export_editor_schemas', ROOT / 'tools/export_editor_schemas.py')
+    spec = importlib.util.spec_from_file_location('export_schemas', ROOT / 'tools/editor/export_schemas.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     source = tmp_path / 'sample.yaml'
