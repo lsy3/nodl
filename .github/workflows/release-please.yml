@@ -1,0 +1,106 @@
+---
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  versions:
+    name: Release versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - run: python3 -m unittest discover -s tools/tests -q
+      - run: python3 tools/check_release_versions.py .
+
+  release-please:
+    name: Prepare release PR / tag
+    needs: versions
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # Optional RELEASE_PLEASE_TOKEN: a PAT owned by a repository writer.
+          # Fine-grained permissions: Contents, Issues, and Pull requests: write.
+          # A classic PAT needs public_repo for this public repository.
+          # Authorize organization SSO if required by the organization.
+          # Without it, GITHUB_TOKEN can create PRs/tags/releases, but those
+          # events do not trigger CI. See RELEASING.md before merging a release PR.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+
+  # UNTESTED BLOOM EXAMPLE ONLY: leave commented until a maintainer validates it.
+  # This job would push to ros2-gbp/nodl-release and open a ros/rosdistro PR.
+  # BLOOM_RELEASE_PAT must be a classic PAT with public_repo and workflow scopes.
+  # Its owner must have push access to ros2-gbp/nodl-release and be able to
+  # create/update their own ros/rosdistro fork and open an upstream PR.
+  # Authorize organization SSO where required; a PAT does not grant membership.
+  # Set repository variable BLOOM_GITHUB_USER to that PAT owner's GitHub login.
+  # The source repo's GITHUB_TOKEN cannot write to the separate release repo.
+  # Before enabling: validate the Jazzy track, release-tag=:{version}, package
+  # inclusion/ignored packages, rosdep dependencies, and package CHANGELOG.rst.
+  # Confirm the track imports needs.release-please.outputs.tag_name, not main.
+  # Start with one distro; serialize releases because tracks share a Git repo.
+  # bloom:
+  #   needs: release-please
+  #   if: needs.release-please.outputs.release_created == 'true'
+  #   runs-on: ubuntu-24.04
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - uses: actions/setup-python@v6
+  #       with:
+  #         python-version: '3.12'
+  #     - run: python3 -m pip install bloom catkin-pkg rosdep
+  #     - name: Configure Bloom API and Git credentials
+  #       env:
+  #         BLOOM_PAT: ${{ secrets.BLOOM_RELEASE_PAT }}
+  #         BLOOM_USER: ${{ vars.BLOOM_GITHUB_USER }}
+  #       run: |
+  #         python3 - <<'PY'
+  #         import json
+  #         import os
+  #         from pathlib import Path
+  #         config = Path.home() / '.config' / 'bloom'
+  #         config.parent.mkdir(parents=True, exist_ok=True)
+  #         config.touch(mode=0o600)
+  #         config.write_text(json.dumps({
+  #             'github_user': os.environ['BLOOM_USER'],
+  #             'oauth_token': os.environ['BLOOM_PAT'],
+  #         }))
+  #         credentials = Path.home() / '.netrc'
+  #         credentials.touch(mode=0o600)
+  #         credentials.write_text(
+  #             'machine github.com\nlogin ' + os.environ['BLOOM_USER']
+  #             + '\npassword ' + os.environ['BLOOM_PAT'] + '\n')
+  #         PY
+  #         git config --global user.name "$BLOOM_USER"
+  #         git config --global user.email "$BLOOM_USER@users.noreply.github.com"
+  #     - run: sudo rosdep init && rosdep update --rosdistro jazzy
+  #     - run: bloom-release --rosdistro jazzy --track jazzy --non-interactive nodl
+  #     - name: Remove credentials
+  #       if: always()
+  #       run: rm -f ~/.config/bloom ~/.netrc
