@@ -44,26 +44,20 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          # Optional RELEASE_PLEASE_TOKEN: a PAT owned by a repository writer.
-          # Fine-grained permissions: Contents, Issues, and Pull requests: write.
-          # A classic PAT needs public_repo for this public repository.
-          # Authorize organization SSO if required by the organization.
-          # Without it, GITHUB_TOKEN can create PRs/tags/releases, but those
-          # events do not trigger CI. See RELEASING.md before merging a release PR.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          # Defaults to GITHUB_TOKEN: generated PRs/tags do not trigger CI.
+          # For automatic CI, add RELEASE_PLEASE_TOKEN and uncomment below.
+          # PAT owner needs repo write access; fine-grained permissions:
+          # Contents, Issues, Pull requests: write; classic scope: public_repo.
+          # Authorize organization SSO if required.
+          # token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
-  # UNTESTED BLOOM EXAMPLE ONLY: leave commented until a maintainer validates it.
-  # This job would push to ros2-gbp/nodl-release and open a ros/rosdistro PR.
-  # BLOOM_RELEASE_PAT must be a classic PAT with public_repo and workflow scopes.
-  # Its owner must have push access to ros2-gbp/nodl-release and be able to
-  # create/update their own ros/rosdistro fork and open an upstream PR.
-  # Authorize organization SSO where required; a PAT does not grant membership.
-  # Set repository variable BLOOM_GITHUB_USER to that PAT owner's GitHub login.
-  # The source repo's GITHUB_TOKEN cannot write to the separate release repo.
-  # Before enabling: validate the Jazzy track, release-tag=:{version}, package
-  # inclusion/ignored packages, rosdep dependencies, and package CHANGELOG.rst.
-  # Confirm the track imports needs.release-please.outputs.tag_name, not main.
-  # Start with one distro; serialize releases because tracks share a Git repo.
+  # UNTESTED: keep Bloom disabled until a maintainer validates the release track.
+  # BLOOM_RELEASE_PAT: classic PAT with public_repo + workflow scopes.
+  # Owner needs push access to ros2-gbp/nodl-release and rosdistro fork/PR access.
+  # Set BLOOM_GITHUB_USER to the PAT owner's login; authorize SSO if required.
+  # GITHUB_TOKEN cannot publish to the separate release repository.
+  # Before enabling: check exact source tag, package selection, rosdep, and RST
+  # changelogs; see RELEASING.md. Serialize distro releases to the shared repo.
   # bloom:
   #   needs: release-please
   #   if: needs.release-please.outputs.release_created == 'true'
