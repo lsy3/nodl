@@ -113,3 +113,25 @@ Equivalent implementation choice: README had no quickstart section, so a short G
 No material contract deviations.
 Public URL availability remains a post-merge check; local tests deliberately avoid claiming that the unmerged files are already published.
 Existing unrelated workspace changes were preserved.
+
+## VS Code GUI verification
+
+Passed on 14 October 2026 on macOS with VS Code 1.139.1 and Red Hat YAML 1.25.0, using the schemas from commit `2431ec1`.
+The test used an isolated workspace with the checked-in association patterns and a local absolute path to `nodl.schema.json` in place of the unpublished public URL.
+The colocated `parameter.schema.json` resolved through its relative reference.
+The workspace remained in Restricted Mode.
+Snapshots were captured in a fresh window with the same fixtures and local schema association.
+
+| GUI check | Observed result | Snapshot |
+| --- | --- | --- |
+| Root `valid.nodl.yaml` | No diagnostics; Problems panel shows no problems. | [Valid fixture](editor-schema-snapshots/valid.jpg) |
+| Nested `invalid.nodl.yml` | Exactly three errors: unknown `unknown_field`, unsupported parameter type `float`, and missing QoS `depth`. | [Invalid fixture](editor-schema-snapshots/invalid.jpg) |
+| Root field completion | Suggestions include `parameters`, `publishers`, `subscriptions`, service/action fields, and other schema fields. | [Field suggestions](editor-schema-snapshots/fields.jpg) |
+| Parameter type completion | Suggestions include scalar and array parameter types such as `bool`, `int`, `double`, and `string`. | [Parameter types](editor-schema-snapshots/parameter-types.jpg) |
+| QoS history completion | Suggestions include `KEEP_ALL`, `KEEP_LAST`, and `SYSTEM_DEFAULT`. | [QoS history](editor-schema-snapshots/qos-history.jpg) |
+| `nodl_version` hover | Shows "NoDL schema major version this document targets." and the local schema source. | [Hover documentation](editor-schema-snapshots/hover.jpg) |
+
+Completion snapshots deliberately show incomplete scratch documents; their temporary diagnostics are expected.
+The scratch document was restored after testing.
+These snapshots can also be linked from the PR description.
+Public URL loading remains a post-merge check; these GUI results verify the documented local-schema setup.
