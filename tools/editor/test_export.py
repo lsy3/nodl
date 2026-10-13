@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Ensure published schemas are faithful, current exports of the canonical YAML."""
 
-import importlib.util
 import json
 from pathlib import Path
 
+from export_schemas import export_schemas
 from jsonschema import Draft7Validator
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,10 +13,7 @@ SCHEMAS = ROOT / 'nodl_schema/nodl_schema/schemas'
 
 
 def test_published_schemas_are_current(tmp_path):
-    spec = importlib.util.spec_from_file_location('export_schemas', ROOT / 'tools/editor/export_schemas.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.export_schemas(sorted(SCHEMAS.glob('*.yaml')), tmp_path)
+    export_schemas(sorted(SCHEMAS.glob('*.yaml')), tmp_path)
     for generated in tmp_path.glob('*.json'):
         published = SCHEMAS / generated.name
         assert json.loads(published.read_text()) == json.loads(generated.read_text()), f'Regenerate {published}'
@@ -24,9 +21,6 @@ def test_published_schemas_are_current(tmp_path):
 
 
 def test_export_preserves_fragments_and_unrelated_references(tmp_path):
-    spec = importlib.util.spec_from_file_location('export_schemas', ROOT / 'tools/editor/export_schemas.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
     source = tmp_path / 'sample.yaml'
     source.write_text(
         '$id: sample.yaml\n'
@@ -37,7 +31,7 @@ def test_export_preserves_fragments_and_unrelated_references(tmp_path):
         'description: sample.yaml\n'
     )
     output = tmp_path / 'output'
-    module.export_schemas([source], output)
+    export_schemas([source], output)
     assert json.loads((output / 'sample.json').read_text()) == {
         '$id': 'sample.json',
         'allOf': [
