@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Open Source Robotics Foundation, Inc.
 # SPDX-License-Identifier: Apache-2.0
-"""Check package versions and release-please coverage without importing setup.py."""
+"""Check package versions and release-please coverage for package manifests."""
 
 import argparse
-import ast
 import json
 import os
 import xml.etree.ElementTree as ET
@@ -32,22 +31,6 @@ def check_versions(root: Path) -> list[str]:
             errors.append(f'{relative}: expected {expected}, got {version}')
         if relative not in covered:
             errors.append(f'{relative}: missing from extra-files')
-        setup = manifest.with_name('setup.py')
-        if not setup.exists():
-            continue
-        relative = setup.relative_to(root).as_posix()
-        calls = [
-            node
-            for node in ast.walk(ast.parse(setup.read_text()))
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'setup'
-        ]
-        versions = [keyword.value for call in calls for keyword in call.keywords if keyword.arg == 'version']
-        if len(versions) != 1 or not isinstance(versions[0], ast.Constant) or versions[0].value != expected:
-            errors.append(f'{relative}: expected literal setup version {expected}')
-        if relative not in covered:
-            errors.append(f'{relative}: missing from extra-files')
-        if not versions or 'x-release-please-version' not in setup.read_text().splitlines()[versions[0].lineno - 1]:
-            errors.append(f'{relative}: missing release-please annotation')
     if not manifests:
         errors.append('No package.xml files found')
     for relative in sorted(covered):

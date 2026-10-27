@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Open Source Robotics Foundation, Inc.
 # SPDX-License-Identifier: Apache-2.0
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
 from setuptools import setup
 
 package_name = 'nodl_schema'
 
 setup(
     name=package_name,
-    version='2.0.3',  # x-release-please-version
+    version=ET.parse(Path(__file__).with_name('package.xml')).findtext('version'),
     packages=[package_name],
     package_data={package_name: ['schemas/*.yaml']},
     data_files=[

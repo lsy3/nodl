@@ -26,7 +26,7 @@ Find complete documentation at https://nodl.readthedocs.io/en/latest/
 
 ## Developing
 
-See [RELEASING.md](./RELEASING.md) for versioning, tag releases, and the future Bloom release example.
+See [RELEASING.md](./RELEASING.md) for versioning and tag releases.
 
 ### Setup
 
