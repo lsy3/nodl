@@ -3,18 +3,16 @@
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 package_name = 'nodl_docgen'
 
 setup(
     name=package_name,
     version=ET.parse(Path(__file__).with_name('package.xml')).findtext('version'),
-    packages=[package_name],
+    packages=find_packages(exclude=['test', 'test.*']),
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    zip_safe=True,
-    extras_require={'test': ['pytest', 'pyright']},
 )

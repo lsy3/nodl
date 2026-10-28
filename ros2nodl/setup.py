@@ -10,13 +10,11 @@ package_name = 'ros2nodl'
 setup(
     name=package_name,
     version=ET.parse(Path(__file__).with_name('package.xml')).findtext('version'),
-    packages=find_packages(exclude=['test']),
+    packages=find_packages(exclude=['test', 'test.*']),
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    extras_require={'test': ['pytest', 'pyright']},
-    zip_safe=True,
     entry_points={
         'ros2cli.command': [
             'nodl = ros2nodl.command.nodl:NodlCommand',

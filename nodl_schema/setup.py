@@ -3,14 +3,14 @@
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 package_name = 'nodl_schema'
 
 setup(
     name=package_name,
     version=ET.parse(Path(__file__).with_name('package.xml')).findtext('version'),
-    packages=[package_name],
+    packages=find_packages(exclude=['test', 'test.*']),
     package_data={package_name: ['schemas/*.yaml']},
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
@@ -23,6 +23,4 @@ setup(
             ],
         ),
     ],
-    zip_safe=True,
-    extras_require={'test': ['pytest', 'pyright']},
 )
