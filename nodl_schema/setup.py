@@ -12,6 +12,8 @@ setup(
     version=ET.parse(Path(__file__).with_name('package.xml')).findtext('version'),
     packages=find_packages(exclude=['test', 'test.*']),
     package_data={package_name: ['schemas/*.yaml']},
+    # colcon uses test extras to select pytest instead of unittest.
+    extras_require={'test': ['pytest', 'pyright']},
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),

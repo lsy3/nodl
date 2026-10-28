@@ -62,7 +62,7 @@ class ReleaseVersionsTest(unittest.TestCase):
             ],
         )
 
-    def test_setup_uses_adjacent_manifest_version(self):
+    def test_setup_versions_and_pytest_metadata(self):
         root = Path(__file__).resolve().parents[2]
         scripts = sorted(root.glob('*/setup.py'))
         self.assertTrue(scripts)
@@ -77,4 +77,7 @@ class ReleaseVersionsTest(unittest.TestCase):
                     setuptools.find_packages = Mock(return_value=[])
                     with patch.dict(sys.modules, {'setuptools': setuptools}):
                         runpy.run_path(str(script))
-                    self.assertEqual(setuptools.setup.call_args.kwargs['version'], version)
+                    metadata = setuptools.setup.call_args.kwargs
+                    self.assertEqual(metadata['version'], version)
+                    # Missing pytest metadata makes colcon fall back to unittest.
+                    self.assertIn('pytest', metadata.get('extras_require', {}).get('test', []))
